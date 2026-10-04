@@ -2,6 +2,9 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
+const API_BASE_URL =
+  "https://attendance-backend-2nky.onrender.com";
+
 type Employee = {
   id: number;
   employeeId: string;
@@ -9,49 +12,54 @@ type Employee = {
   email: string;
   department: string;
   photoUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
-const API_URL = "https://attendance-backend-2nky.onrender.com";
-
-export default function EmployeeRegistration() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-
-  const [formData, setFormData] = useState({
-    employeeId: "",
-    name: "",
-    email: "",
-    department: "",
-    password: "",
-    confirmPassword: "",
-  });
-
+export default function EmployeesPage() {
+  const [employeeId, setEmployeeId] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [department, setDepartment] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
+
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   // ======================================================
   // FETCH EMPLOYEES
   // ======================================================
+
   const fetchEmployees = async () => {
     try {
-      setLoading(true);
+      setLoadingEmployees(true);
 
       const response = await fetch(
-        `${API_URL}/api/employees`
+        `${API_BASE_URL}/api/employees`
       );
 
       const data = await response.json();
 
       if (data.success) {
-        setEmployees(data.employees);
+        setEmployees(data.employees || []);
       } else {
-        setMessage("Failed to fetch employees.");
+        setError(
+          data.message || "Failed to load employees."
+        );
       }
-    } catch (error) {
-      console.error(error);
-      setMessage("Unable to connect to backend.");
+    } catch (err) {
+      console.error("FETCH EMPLOYEES ERROR:", err);
+
+      setError(
+        "Unable to connect to the attendance backend."
+      );
     } finally {
-      setLoading(false);
+      setLoadingEmployees(false);
     }
   };
 
@@ -60,132 +68,190 @@ export default function EmployeeRegistration() {
   }, []);
 
   // ======================================================
-  // HANDLE TEXT INPUT
+  // PHOTO CHANGE
   // ======================================================
-  const handleChange = (
-    event: ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = event.target;
 
-    setFormData((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
-  };
-
-  // ======================================================
-  // HANDLE PHOTO
-  // ======================================================
   const handlePhotoChange = (
     event: ChangeEvent<HTMLInputElement>
   ) => {
-    const file = event.target.files?.[0] ?? null;
-    setPhoto(file);
+    const selectedFile = event.target.files?.[0];
+
+    if (!selectedFile) {
+      setPhoto(null);
+      return;
+    }
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+
+    if (!allowedTypes.includes(selectedFile.type)) {
+      setPhoto(null);
+      event.target.value = "";
+
+      setError(
+        "Only JPG, PNG and WebP image files are allowed."
+      );
+
+      return;
+    }
+
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      setPhoto(null);
+      event.target.value = "";
+
+      setError(
+        "Employee Photo must be 5 MB or smaller."
+      );
+
+      return;
+    }
+
+    setError("");
+    setPhoto(selectedFile);
   };
 
   // ======================================================
   // REGISTER EMPLOYEE
   // ======================================================
+
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
 
     setMessage("");
+    setError("");
 
     // --------------------------------------------------
-    // Validate photo
+    // Frontend validation
     // --------------------------------------------------
-    if (!photo) {
-      setMessage("Employee Photo is required.");
+
+    if (!employeeId.trim()) {
+      setError("Employee ID is required.");
       return;
     }
 
-    // --------------------------------------------------
-    // Validate password
-    // --------------------------------------------------
-    if (!formData.password.trim()) {
-      setMessage("Employee Password is required.");
+    if (!name.trim()) {
+      setError("Employee Name is required.");
       return;
     }
 
-    if (formData.password.length < 6) {
-      setMessage(
+    if (!email.trim()) {
+      setError("Email is required.");
+      return;
+    }
+
+    if (!department.trim()) {
+      setError("Department is required.");
+      return;
+    }
+
+    if (!password) {
+      setError("Employee Password is required.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError(
         "Employee Password must be at least 6 characters."
       );
       return;
     }
 
-    if (!formData.confirmPassword.trim()) {
-      setMessage("Confirm Password is required.");
+    if (!confirmPassword) {
+      setError("Confirm Password is required.");
       return;
     }
 
-    if (
-      formData.password !== formData.confirmPassword
-    ) {
-      setMessage(
+    if (password !== confirmPassword) {
+      setError(
         "Employee Password and Confirm Password do not match."
       );
       return;
     }
 
-    setMessage("Registering employee...");
+    if (!photo) {
+      setError("Employee Photo is required.");
+      return;
+    }
 
     try {
+      setLoading(true);
+
+      // ------------------------------------------------
+      // Multipart form data
+      // ------------------------------------------------
+
+      const formData = new FormData();
+
+      formData.append(
+        "employeeId",
+        employeeId.trim()
+      );
+
+      formData.append("name", name.trim());
+
+      formData.append("email", email.trim());
+
+      formData.append(
+        "department",
+        department.trim()
+      );
+
+      formData.append("password", password);
+
+      formData.append(
+        "confirmPassword",
+        confirmPassword
+      );
+
+      formData.append("photo", photo);
+
+      // ------------------------------------------------
+      // Send to backend
+      // ------------------------------------------------
+
       const response = await fetch(
-        `${API_URL}/api/employees`,
+        `${API_BASE_URL}/api/employees`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            employeeId: formData.employeeId,
-            name: formData.name,
-            email: formData.email,
-            department: formData.department,
-            password: formData.password,
-            confirmPassword: formData.confirmPassword,
-
-            // The current backend stores photoUrl only.
-            // Actual image upload is not implemented yet.
-            photoUrl: null,
-          }),
+          body: formData,
         }
       );
 
       const data = await response.json();
 
-      if (!response.ok) {
-        setMessage(
+      if (!response.ok || !data.success) {
+        throw new Error(
           data.message ||
             "Failed to register employee."
         );
-        return;
       }
 
+      // ------------------------------------------------
+      // Success
+      // ------------------------------------------------
+
       setMessage(
-        "Employee registered successfully."
+        "Employee registered successfully with photo."
       );
 
-      // --------------------------------------------------
       // Clear form
-      // --------------------------------------------------
-      setFormData({
-        employeeId: "",
-        name: "",
-        email: "",
-        department: "",
-        password: "",
-        confirmPassword: "",
-      });
 
+      setEmployeeId("");
+      setName("");
+      setEmail("");
+      setDepartment("");
+      setPassword("");
+      setConfirmPassword("");
       setPhoto(null);
 
       const photoInput =
         document.getElementById(
-          "photo"
+          "employeePhoto"
         ) as HTMLInputElement | null;
 
       if (photoInput) {
@@ -193,307 +259,469 @@ export default function EmployeeRegistration() {
       }
 
       // Refresh employee list
+
       await fetchEmployees();
-    } catch (error) {
-      console.error(error);
-      setMessage(
-        "Unable to connect to backend."
+    } catch (err) {
+      console.error(
+        "REGISTER EMPLOYEE ERROR:",
+        err
       );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to register employee."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-gray-100 px-6 py-10">
-      <div className="mx-auto max-w-5xl">
+    <main
+      style={{
+        minHeight: "100vh",
+        padding: "40px 20px",
+        background: "#f5f7fb",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "1100px",
+          margin: "0 auto",
+        }}
+      >
+        <h1
+          style={{
+            fontSize: "32px",
+            fontWeight: 700,
+            marginBottom: "8px",
+          }}
+        >
+          Employee Registration
+        </h1>
 
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Employee Registration
-          </h1>
+        <p
+          style={{
+            color: "#555",
+            marginBottom: "30px",
+          }}
+        >
+          Register employees with secure password
+          authentication and Cloudinary photo storage.
+        </p>
 
-          <p className="mt-2 text-gray-600">
-            Register employees for the TALENTRONAUT
-            Smart Attendance System.
-          </p>
-        </div>
+        {/* ==================================================
+            REGISTRATION FORM
+        ================================================== */}
 
-        {/* Registration Form */}
         <form
           onSubmit={handleSubmit}
-          className="rounded-xl bg-white p-8 shadow"
+          style={{
+            background: "#ffffff",
+            padding: "30px",
+            borderRadius: "12px",
+            boxShadow:
+              "0 2px 10px rgba(0,0,0,0.08)",
+            marginBottom: "40px",
+          }}
         >
-          <h2 className="mb-6 text-xl font-bold text-gray-900">
-            Register New Employee
-          </h2>
-
-          {/* Employee ID */}
-          <div className="mb-6">
-            <label
-              htmlFor="employeeId"
-              className="mb-2 block font-medium text-gray-700"
-            >
-              Employee ID *
-            </label>
-
-            <input
-              id="employeeId"
-              name="employeeId"
-              type="text"
-              placeholder="Example: EMP005"
-              value={formData.employeeId}
-              onChange={handleChange}
-              required
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          {/* Employee Name */}
-          <div className="mb-6">
-            <label
-              htmlFor="name"
-              className="mb-2 block font-medium text-gray-700"
-            >
-              Employee Name *
-            </label>
-
-            <input
-              id="name"
-              name="name"
-              type="text"
-              placeholder="Enter employee name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          {/* Email */}
-          <div className="mb-6">
-            <label
-              htmlFor="email"
-              className="mb-2 block font-medium text-gray-700"
-            >
-              Email *
-            </label>
-
-            <input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="employee@company.com"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          {/* Department */}
-          <div className="mb-6">
-            <label
-              htmlFor="department"
-              className="mb-2 block font-medium text-gray-700"
-            >
-              Department *
-            </label>
-
-            <select
-              id="department"
-              name="department"
-              value={formData.department}
-              onChange={handleChange}
-              required
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
-            >
-              <option value="">
-                Select department
-              </option>
-              <option value="Production">
-                Production
-              </option>
-              <option value="Quality">
-                Quality
-              </option>
-              <option value="Maintenance">
-                Maintenance
-              </option>
-              <option value="HR">
-                HR
-              </option>
-              <option value="IT">
-                IT
-              </option>
-              <option value="Finance">
-                Finance
-              </option>
-            </select>
-          </div>
-
-          {/* Employee Password */}
-          <div className="mb-6">
-            <label
-              htmlFor="password"
-              className="mb-2 block font-medium text-gray-700"
-            >
-              Employee Password *
-            </label>
-
-            <input
-              id="password"
-              name="password"
-              type="password"
-              placeholder="Enter employee password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              minLength={6}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
-            />
-
-            <p className="mt-2 text-sm text-gray-500">
-              Minimum 6 characters.
-            </p>
-          </div>
-
-          {/* Confirm Password */}
-          <div className="mb-6">
-            <label
-              htmlFor="confirmPassword"
-              className="mb-2 block font-medium text-gray-700"
-            >
-              Confirm Employee Password *
-            </label>
-
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              placeholder="Re-enter employee password"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              required
-              minLength={6}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          {/* Employee Photo */}
-          <div className="mb-8">
-            <label
-              htmlFor="photo"
-              className="mb-2 block font-medium text-gray-700"
-            >
-              Employee Photo *
-            </label>
-
-            <input
-              id="photo"
-              name="photo"
-              type="file"
-              accept="image/*"
-              onChange={handlePhotoChange}
-              required
-              className="w-full rounded-lg border border-gray-300 p-3"
-            />
-
-            {photo && (
-              <p className="mt-2 text-sm text-gray-600">
-                Selected: {photo.name}
-              </p>
-            )}
-          </div>
-
-          {/* Submit */}
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700"
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: "20px",
+            }}
           >
-            Register Employee
-          </button>
+            {/* Employee ID */}
 
-          {/* Message */}
+            <div>
+              <label>
+                Employee ID *
+              </label>
+
+              <input
+                type="text"
+                value={employeeId}
+                onChange={(e) =>
+                  setEmployeeId(e.target.value)
+                }
+                placeholder="Enter Employee ID"
+                required
+                style={inputStyle}
+              />
+            </div>
+
+            {/* Employee Name */}
+
+            <div>
+              <label>
+                Employee Name *
+              </label>
+
+              <input
+                type="text"
+                value={name}
+                onChange={(e) =>
+                  setName(e.target.value)
+                }
+                placeholder="Enter Employee Name"
+                required
+                style={inputStyle}
+              />
+            </div>
+
+            {/* Email */}
+
+            <div>
+              <label>
+                Email *
+              </label>
+
+              <input
+                type="email"
+                value={email}
+                onChange={(e) =>
+                  setEmail(e.target.value)
+                }
+                placeholder="Enter Email"
+                required
+                style={inputStyle}
+              />
+            </div>
+
+            {/* Department */}
+
+            <div>
+              <label>
+                Department *
+              </label>
+
+              <select
+                value={department}
+                onChange={(e) =>
+                  setDepartment(e.target.value)
+                }
+                required
+                style={inputStyle}
+              >
+                <option value="">
+                  Select Department
+                </option>
+
+                <option value="Production">
+                  Production
+                </option>
+
+                <option value="Quality">
+                  Quality
+                </option>
+
+                <option value="Maintenance">
+                  Maintenance
+                </option>
+
+                <option value="Operations">
+                  Operations
+                </option>
+
+                <option value="HR">
+                  HR
+                </option>
+
+                <option value="IT">
+                  IT
+                </option>
+
+                <option value="Finance">
+                  Finance
+                </option>
+              </select>
+            </div>
+
+            {/* Password */}
+
+            <div>
+              <label>
+                Employee Password *
+              </label>
+
+              <input
+                type="password"
+                value={password}
+                onChange={(e) =>
+                  setPassword(e.target.value)
+                }
+                placeholder="Minimum 6 characters"
+                required
+                style={inputStyle}
+              />
+            </div>
+
+            {/* Confirm Password */}
+
+            <div>
+              <label>
+                Confirm Employee Password *
+              </label>
+
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) =>
+                  setConfirmPassword(
+                    e.target.value
+                  )
+                }
+                placeholder="Confirm Password"
+                required
+                style={inputStyle}
+              />
+            </div>
+
+            {/* Employee Photo */}
+
+            <div
+              style={{
+                gridColumn: "1 / -1",
+              }}
+            >
+              <label>
+                Employee Photo *
+              </label>
+
+              <input
+                id="employeePhoto"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handlePhotoChange}
+                required
+                style={inputStyle}
+              />
+
+              <p
+                style={{
+                  marginTop: "6px",
+                  fontSize: "13px",
+                  color: "#666",
+                }}
+              >
+                JPG, PNG or WebP. Maximum size: 5 MB.
+              </p>
+
+              {photo && (
+                <p
+                  style={{
+                    fontSize: "14px",
+                    color: "green",
+                  }}
+                >
+                  Selected: {photo.name}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Messages */}
+
+          {error && (
+            <div
+              style={{
+                marginTop: "20px",
+                padding: "12px",
+                background: "#fee2e2",
+                color: "#991b1b",
+                borderRadius: "8px",
+              }}
+            >
+              {error}
+            </div>
+          )}
+
           {message && (
-            <div className="mt-5 rounded-lg bg-blue-50 p-4 text-blue-700">
+            <div
+              style={{
+                marginTop: "20px",
+                padding: "12px",
+                background: "#dcfce7",
+                color: "#166534",
+                borderRadius: "8px",
+              }}
+            >
               {message}
             </div>
           )}
+
+          {/* Register button */}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              marginTop: "25px",
+              padding: "13px 25px",
+              border: "none",
+              borderRadius: "8px",
+              background:
+                loading ? "#999" : "#2563eb",
+              color: "#ffffff",
+              fontSize: "16px",
+              fontWeight: 600,
+              cursor: loading
+                ? "not-allowed"
+                : "pointer",
+            }}
+          >
+            {loading
+              ? "Registering Employee..."
+              : "Register Employee"}
+          </button>
         </form>
 
-        {/* Employee List */}
-        <div className="mt-8 overflow-hidden rounded-xl bg-white shadow">
+        {/* ==================================================
+            REGISTERED EMPLOYEES
+        ================================================== */}
 
-          <div className="border-b px-6 py-5">
-            <h2 className="text-xl font-bold text-gray-900">
-              Registered Employees
-            </h2>
+        <section
+          style={{
+            background: "#ffffff",
+            padding: "30px",
+            borderRadius: "12px",
+            boxShadow:
+              "0 2px 10px rgba(0,0,0,0.08)",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "24px",
+              fontWeight: 700,
+              marginBottom: "20px",
+            }}
+          >
+            Registered Employees
+          </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
-              Employees fetched from the backend database.
-            </p>
-          </div>
-
-          {loading ? (
-            <div className="p-6 text-gray-600">
-              Loading employees...
-            </div>
+          {loadingEmployees ? (
+            <p>Loading employees...</p>
           ) : employees.length === 0 ? (
-            <div className="p-6 text-gray-600">
-              No employees found.
-            </div>
+            <p>No employees registered yet.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-
-                <thead className="bg-gray-50 text-sm text-gray-600">
+            <div
+              style={{
+                overflowX: "auto",
+              }}
+            >
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                }}
+              >
+                <thead>
                   <tr>
-                    <th className="px-6 py-4">
+                    <th style={thStyle}>
+                      Photo
+                    </th>
+
+                    <th style={thStyle}>
                       Employee ID
                     </th>
-                    <th className="px-6 py-4">
+
+                    <th style={thStyle}>
                       Name
                     </th>
-                    <th className="px-6 py-4">
+
+                    <th style={thStyle}>
                       Email
                     </th>
-                    <th className="px-6 py-4">
+
+                    <th style={thStyle}>
                       Department
                     </th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {employees.map((employee) => (
-                    <tr
-                      key={employee.id}
-                      className="border-t hover:bg-gray-50"
-                    >
-                      <td className="px-6 py-4 font-semibold">
-                        {employee.employeeId}
-                      </td>
+                  {employees.map(
+                    (employee) => (
+                      <tr
+                        key={employee.id}
+                      >
+                        <td style={tdStyle}>
+                          {employee.photoUrl ? (
+                            <img
+                              src={
+                                employee.photoUrl
+                              }
+                              alt={
+                                employee.name
+                              }
+                              width={60}
+                              height={60}
+                              style={{
+                                width: "60px",
+                                height: "60px",
+                                objectFit:
+                                  "cover",
+                                borderRadius:
+                                  "50%",
+                              }}
+                            />
+                          ) : (
+                            "No Photo"
+                          )}
+                        </td>
 
-                      <td className="px-6 py-4">
-                        {employee.name}
-                      </td>
+                        <td style={tdStyle}>
+                          {
+                            employee.employeeId
+                          }
+                        </td>
 
-                      <td className="px-6 py-4">
-                        {employee.email}
-                      </td>
+                        <td style={tdStyle}>
+                          {employee.name}
+                        </td>
 
-                      <td className="px-6 py-4">
-                        {employee.department}
-                      </td>
-                    </tr>
-                  ))}
+                        <td style={tdStyle}>
+                          {employee.email}
+                        </td>
+
+                        <td style={tdStyle}>
+                          {
+                            employee.department
+                          }
+                        </td>
+                      </tr>
+                    )
+                  )}
                 </tbody>
-
               </table>
             </div>
           )}
-        </div>
-
+        </section>
       </div>
     </main>
   );
 }
+
+const inputStyle = {
+  width: "100%",
+  marginTop: "8px",
+  padding: "12px",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  fontSize: "15px",
+  boxSizing: "border-box" as const,
+};
+
+const thStyle = {
+  textAlign: "left" as const,
+  padding: "12px",
+  borderBottom: "2px solid #e5e7eb",
+};
+
+const tdStyle = {
+  padding: "12px",
+  borderBottom: "1px solid #e5e7eb",
+};
