@@ -120,7 +120,7 @@ router.post("/", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 2. Password is compulsory
+    // 2. Password validation
     // --------------------------------------------------
     if (!password || !password.trim()) {
       return res.status(400).json({
@@ -137,10 +137,18 @@ router.post("/", async (req, res) => {
       });
     }
 
-    if (confirmPassword !== undefined && password !== confirmPassword) {
+    if (confirmPassword === undefined || confirmPassword === "") {
       return res.status(400).json({
         success: false,
-        message: "Employee Password and Confirm Password do not match.",
+        message: "Confirm Password is required.",
+      });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Employee Password and Confirm Password do not match.",
       });
     }
 
@@ -168,7 +176,7 @@ router.post("/", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 4. Hash password
+    // 4. Hash password using bcrypt
     // --------------------------------------------------
     const passwordHash = await bcrypt.hash(password, 12);
 
@@ -215,67 +223,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.post("/temporary-password-setup", async (req, res) => {
-  try {
-    const { employeeId, setupKey, password } = req.body;
-
-    if (setupKey !== process.env.PASSWORD_SETUP_KEY) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized.",
-      });
-    }
-
-    if (!employeeId || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Employee ID and password are required.",
-      });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: "Password must be at least 6 characters.",
-      });
-    }
-
-    const employee = await prisma.employee.findUnique({
-      where: {
-        employeeId: employeeId.trim(),
-      },
-    });
-
-    if (!employee) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found.",
-      });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 12);
-
-    await prisma.employee.update({
-      where: {
-        id: employee.id,
-      },
-      data: {
-        passwordHash,
-      },
-    });
-
-    return res.json({
-      success: true,
-      message: "Employee password configured successfully.",
-    });
-  } catch (error) {
-    console.error("TEMP PASSWORD SETUP ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to configure employee password.",
-    });
-  }
-});
-
+// ======================================================
+// EXPORT ROUTER
+// ======================================================
 module.exports = router;
