@@ -11,7 +11,6 @@ type Employee = {
   photoUrl: string | null;
 };
 
-// Public backend URL
 const API_URL = "https://attendance-backend-2nky.onrender.com";
 
 export default function EmployeeRegistration() {
@@ -22,13 +21,17 @@ export default function EmployeeRegistration() {
     name: "",
     email: "",
     department: "",
+    password: "",
+    confirmPassword: "",
   });
 
   const [photo, setPhoto] = useState<File | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Fetch employees from backend
+  // ======================================================
+  // FETCH EMPLOYEES
+  // ======================================================
   const fetchEmployees = async () => {
     try {
       setLoading(true);
@@ -52,11 +55,13 @@ export default function EmployeeRegistration() {
     }
   };
 
-  // Load employees when page opens
   useEffect(() => {
     fetchEmployees();
   }, []);
 
+  // ======================================================
+  // HANDLE TEXT INPUT
+  // ======================================================
   const handleChange = (
     event: ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -68,6 +73,9 @@ export default function EmployeeRegistration() {
     }));
   };
 
+  // ======================================================
+  // HANDLE PHOTO
+  // ======================================================
   const handlePhotoChange = (
     event: ChangeEvent<HTMLInputElement>
   ) => {
@@ -75,10 +83,52 @@ export default function EmployeeRegistration() {
     setPhoto(file);
   };
 
+  // ======================================================
+  // REGISTER EMPLOYEE
+  // ======================================================
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
+
+    setMessage("");
+
+    // --------------------------------------------------
+    // Validate photo
+    // --------------------------------------------------
+    if (!photo) {
+      setMessage("Employee Photo is required.");
+      return;
+    }
+
+    // --------------------------------------------------
+    // Validate password
+    // --------------------------------------------------
+    if (!formData.password.trim()) {
+      setMessage("Employee Password is required.");
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setMessage(
+        "Employee Password must be at least 6 characters."
+      );
+      return;
+    }
+
+    if (!formData.confirmPassword.trim()) {
+      setMessage("Confirm Password is required.");
+      return;
+    }
+
+    if (
+      formData.password !== formData.confirmPassword
+    ) {
+      setMessage(
+        "Employee Password and Confirm Password do not match."
+      );
+      return;
+    }
 
     setMessage("Registering employee...");
 
@@ -95,6 +145,12 @@ export default function EmployeeRegistration() {
             name: formData.name,
             email: formData.email,
             department: formData.department,
+            password: formData.password,
+            confirmPassword: formData.confirmPassword,
+
+            // The current backend stores photoUrl only.
+            // Actual image upload is not implemented yet.
+            photoUrl: null,
           }),
         }
       );
@@ -103,28 +159,46 @@ export default function EmployeeRegistration() {
 
       if (!response.ok) {
         setMessage(
-          data.message || "Failed to register employee."
+          data.message ||
+            "Failed to register employee."
         );
         return;
       }
 
-      setMessage("Employee registered successfully.");
+      setMessage(
+        "Employee registered successfully."
+      );
 
+      // --------------------------------------------------
       // Clear form
+      // --------------------------------------------------
       setFormData({
         employeeId: "",
         name: "",
         email: "",
         department: "",
+        password: "",
+        confirmPassword: "",
       });
 
       setPhoto(null);
 
+      const photoInput =
+        document.getElementById(
+          "photo"
+        ) as HTMLInputElement | null;
+
+      if (photoInput) {
+        photoInput.value = "";
+      }
+
       // Refresh employee list
-      fetchEmployees();
+      await fetchEmployees();
     } catch (error) {
       console.error(error);
-      setMessage("Unable to connect to backend.");
+      setMessage(
+        "Unable to connect to backend."
+      );
     }
   };
 
@@ -139,7 +213,8 @@ export default function EmployeeRegistration() {
           </h1>
 
           <p className="mt-2 text-gray-600">
-            Register and manage employees in the Smart Attendance System.
+            Register employees for the TALENTRONAUT
+            Smart Attendance System.
           </p>
         </div>
 
@@ -158,7 +233,7 @@ export default function EmployeeRegistration() {
               htmlFor="employeeId"
               className="mb-2 block font-medium text-gray-700"
             >
-              Employee ID
+              Employee ID *
             </label>
 
             <input
@@ -173,13 +248,13 @@ export default function EmployeeRegistration() {
             />
           </div>
 
-          {/* Name */}
+          {/* Employee Name */}
           <div className="mb-6">
             <label
               htmlFor="name"
               className="mb-2 block font-medium text-gray-700"
             >
-              Employee Name
+              Employee Name *
             </label>
 
             <input
@@ -200,7 +275,7 @@ export default function EmployeeRegistration() {
               htmlFor="email"
               className="mb-2 block font-medium text-gray-700"
             >
-              Email
+              Email *
             </label>
 
             <input
@@ -221,7 +296,7 @@ export default function EmployeeRegistration() {
               htmlFor="department"
               className="mb-2 block font-medium text-gray-700"
             >
-              Department
+              Department *
             </label>
 
             <select
@@ -232,23 +307,85 @@ export default function EmployeeRegistration() {
               required
               className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
             >
-              <option value="">Select department</option>
-              <option value="Production">Production</option>
-              <option value="Quality">Quality</option>
-              <option value="Maintenance">Maintenance</option>
-              <option value="HR">HR</option>
-              <option value="IT">IT</option>
-              <option value="Finance">Finance</option>
+              <option value="">
+                Select department
+              </option>
+              <option value="Production">
+                Production
+              </option>
+              <option value="Quality">
+                Quality
+              </option>
+              <option value="Maintenance">
+                Maintenance
+              </option>
+              <option value="HR">
+                HR
+              </option>
+              <option value="IT">
+                IT
+              </option>
+              <option value="Finance">
+                Finance
+              </option>
             </select>
           </div>
 
-          {/* Photo */}
+          {/* Employee Password */}
+          <div className="mb-6">
+            <label
+              htmlFor="password"
+              className="mb-2 block font-medium text-gray-700"
+            >
+              Employee Password *
+            </label>
+
+            <input
+              id="password"
+              name="password"
+              type="password"
+              placeholder="Enter employee password"
+              value={formData.password}
+              onChange={handleChange}
+              required
+              minLength={6}
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
+            />
+
+            <p className="mt-2 text-sm text-gray-500">
+              Minimum 6 characters.
+            </p>
+          </div>
+
+          {/* Confirm Password */}
+          <div className="mb-6">
+            <label
+              htmlFor="confirmPassword"
+              className="mb-2 block font-medium text-gray-700"
+            >
+              Confirm Employee Password *
+            </label>
+
+            <input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              placeholder="Re-enter employee password"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              required
+              minLength={6}
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
+            />
+          </div>
+
+          {/* Employee Photo */}
           <div className="mb-8">
             <label
               htmlFor="photo"
               className="mb-2 block font-medium text-gray-700"
             >
-              Employee Photo
+              Employee Photo *
             </label>
 
             <input
@@ -257,6 +394,7 @@ export default function EmployeeRegistration() {
               type="file"
               accept="image/*"
               onChange={handlePhotoChange}
+              required
               className="w-full rounded-lg border border-gray-300 p-3"
             />
 
@@ -310,10 +448,18 @@ export default function EmployeeRegistration() {
 
                 <thead className="bg-gray-50 text-sm text-gray-600">
                   <tr>
-                    <th className="px-6 py-4">Employee ID</th>
-                    <th className="px-6 py-4">Name</th>
-                    <th className="px-6 py-4">Email</th>
-                    <th className="px-6 py-4">Department</th>
+                    <th className="px-6 py-4">
+                      Employee ID
+                    </th>
+                    <th className="px-6 py-4">
+                      Name
+                    </th>
+                    <th className="px-6 py-4">
+                      Email
+                    </th>
+                    <th className="px-6 py-4">
+                      Department
+                    </th>
                   </tr>
                 </thead>
 

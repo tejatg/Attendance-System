@@ -13,19 +13,20 @@ model Employee {
   name                String
   email               String               @unique
   department          String
+  passwordHash        String?
   photoUrl            String?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   attendance          Attendance[]
-  webauthnCredentials WebAuthnCredential[]
+  WebAuthnCredential  WebAuthnCredential[]
 }
 
 model Attendance {
   id         Int       @id @default(autoincrement())
   employeeId String
   date       DateTime  @default(now())
-  checkIn    DateTime?
-  checkOut   DateTime?
+  checkIn   DateTime?
+  checkOut  DateTime?
   status     String    @default("Present")
   createdAt  DateTime  @default(now())
   employee   Employee  @relation(fields: [employeeId], references: [employeeId])
@@ -43,7 +44,7 @@ model WebAuthnCredential {
   transports   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  employee     Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  Employee     Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@index([employeeId])
 }

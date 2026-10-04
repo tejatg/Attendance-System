@@ -1,5 +1,6 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcrypt");
 const { isInsideGeofence } = require("../utils/geofence");
 
 const router = express.Router();
@@ -12,7 +13,16 @@ router.get("/", async (req, res) => {
   try {
     const attendance = await prisma.attendance.findMany({
       include: {
-        employee: true,
+        employee: {
+          select: {
+            id: true,
+            employeeId: true,
+            name: true,
+            email: true,
+            department: true,
+            photoUrl: true,
+          },
+        },
       },
       orderBy: {
         date: "desc",
@@ -41,6 +51,7 @@ router.post("/", async (req, res) => {
   try {
     const {
       employeeId,
+      password,
       status,
       checkIn,
       checkOut,
@@ -51,7 +62,7 @@ router.post("/", async (req, res) => {
     // --------------------------------------------------
     // 1. Validate Employee ID
     // --------------------------------------------------
-    if (!employeeId) {
+    if (!employeeId || !employeeId.trim()) {
       return res.status(400).json({
         success: false,
         message: "Employee ID is required.",
@@ -59,7 +70,56 @@ router.post("/", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 2. Validate GPS coordinates
+    // 2. Validate Employee Password
+    // --------------------------------------------------
+    if (!password || !password.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee Password is required.",
+      });
+    }
+
+    // --------------------------------------------------
+    // 3. Find Employee
+    // --------------------------------------------------
+    const employee = await prisma.employee.findUnique({
+      where: {
+        employeeId: employeeId.trim(),
+      },
+    });
+
+    if (!employee) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid Employee ID or Password.",
+      });
+    }
+
+    // --------------------------------------------------
+    // 4. Verify Employee Password
+    // --------------------------------------------------
+    if (!employee.passwordHash) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Employee password is not configured. Please contact your administrator.",
+      });
+    }
+
+    const passwordValid = await bcrypt.compare(
+      password,
+      employee.passwordHash
+    );
+
+    if (!passwordValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid Employee ID or Password.",
+      });
+    }
+
+    // --------------------------------------------------
+    // 5. Validate GPS coordinates
     // --------------------------------------------------
     const userLatitude = Number(latitude);
     const userLongitude = Number(longitude);
@@ -75,7 +135,7 @@ router.post("/", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 3. Check Geofence
+    // 6. Check Geofence
     // --------------------------------------------------
     let geofenceResult;
 
@@ -101,23 +161,7 @@ router.post("/", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 4. Check Employee Exists
-    // --------------------------------------------------
-    const employee = await prisma.employee.findUnique({
-      where: {
-        employeeId,
-      },
-    });
-
-    if (!employee) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found.",
-      });
-    }
-
-    // --------------------------------------------------
-    // 5. Get Today's Date Range
+    // 7. Get Today's Date Range
     // --------------------------------------------------
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
@@ -126,12 +170,12 @@ router.post("/", async (req, res) => {
     endOfDay.setHours(23, 59, 59, 999);
 
     // --------------------------------------------------
-    // 6. Prevent Duplicate Check-In
+    // 8. Prevent Duplicate Check-In
     // --------------------------------------------------
     const existingAttendance =
       await prisma.attendance.findFirst({
         where: {
-          employeeId,
+          employeeId: employee.employeeId,
           date: {
             gte: startOfDay,
             lte: endOfDay,
@@ -149,11 +193,11 @@ router.post("/", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 7. Create Attendance Record
+    // 9. Create Attendance Record
     // --------------------------------------------------
     const attendance = await prisma.attendance.create({
       data: {
-        employeeId,
+        employeeId: employee.employeeId,
 
         status: status || "Present",
 
@@ -164,24 +208,24 @@ router.post("/", async (req, res) => {
         checkOut: checkOut
           ? new Date(checkOut)
           : null,
-
-        // Geofence information
-        checkInLat: userLatitude,
-        checkInLng: userLongitude,
-        checkInDistance: geofenceResult.distance,
-
-        // QR verification will be connected later
-        // after secure company QR token validation.
-        qrVerified: false,
       },
 
       include: {
-        employee: true,
+        employee: {
+          select: {
+            id: true,
+            employeeId: true,
+            name: true,
+            email: true,
+            department: true,
+            photoUrl: true,
+          },
+        },
       },
     });
 
     // --------------------------------------------------
-    // 8. Success Response
+    // 10. Success Response
     // --------------------------------------------------
     res.status(201).json({
       success: true,
@@ -228,7 +272,7 @@ router.put("/checkout/:employeeId", async (req, res) => {
     const attendance =
       await prisma.attendance.findFirst({
         where: {
-          employeeId: employeeId,
+          employeeId,
           checkOut: null,
         },
         orderBy: {
@@ -258,7 +302,16 @@ router.put("/checkout/:employeeId", async (req, res) => {
         },
 
         include: {
-          employee: true,
+          employee: {
+            select: {
+              id: true,
+              employeeId: true,
+              name: true,
+              email: true,
+              department: true,
+              photoUrl: true,
+            },
+          },
         },
       });
 
@@ -281,7 +334,4 @@ router.put("/checkout/:employeeId", async (req, res) => {
   }
 });
 
-// ======================================================
-// EXPORT ROUTER
-// ======================================================
 module.exports = router;

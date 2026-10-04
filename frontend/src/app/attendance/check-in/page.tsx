@@ -9,6 +9,7 @@ export default function CheckInPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [employeeId, setEmployeeId] = useState("");
+  const [password, setPassword] = useState("");
   const [employeeName, setEmployeeName] = useState("");
   const [department, setDepartment] = useState("");
   const [email, setEmail] = useState("");
@@ -21,9 +22,6 @@ export default function CheckInPage() {
     useState(false);
   const [photoPreview, setPhotoPreview] =
     useState("");
-
-  const [biometricVerified, setBiometricVerified] =
-    useState(false);
 
   const [latitude, setLatitude] =
     useState<number | null>(null);
@@ -182,134 +180,6 @@ export default function CheckInPage() {
   };
 
   // --------------------------------
-  // REGISTER FINGERPRINT / BIOMETRIC
-  // --------------------------------
-
-  const registerBiometric = async () => {
-    setError("");
-    setMessage("");
-
-    if (!employeeId.trim()) {
-      setError(
-        "Please enter Employee ID before registering biometric."
-      );
-      return;
-    }
-
-    if (!employeeName.trim()) {
-      setError(
-        "Please enter Employee Name before registering biometric."
-      );
-      return;
-    }
-
-    if (!email.trim()) {
-      setError(
-        "Please enter Email before registering biometric."
-      );
-      return;
-    }
-
-    try {
-      if (
-        typeof window === "undefined" ||
-        !window.PublicKeyCredential
-      ) {
-        setError(
-          "WebAuthn biometric authentication is not supported by this browser."
-        );
-        return;
-      }
-
-      if (!window.isSecureContext) {
-        setError(
-          "Biometric registration requires a secure HTTPS connection."
-        );
-        return;
-      }
-
-      setMessage(
-        "Please use your fingerprint, Windows Hello, PIN, or device biometric when prompted."
-      );
-
-      const challenge =
-        crypto.getRandomValues(
-          new Uint8Array(32)
-        );
-
-      const userId =
-        crypto.getRandomValues(
-          new Uint8Array(16)
-        );
-
-      const credential =
-        await navigator.credentials.create({
-          publicKey: {
-            challenge,
-
-            rp: {
-              name: "Smart Attendance System",
-            },
-
-            user: {
-              id: userId,
-              name: email.trim(),
-              displayName:
-                employeeName.trim(),
-            },
-
-            pubKeyCredParams: [
-              {
-                type: "public-key",
-                alg: -7,
-              },
-              {
-                type: "public-key",
-                alg: -257,
-              },
-            ],
-
-            authenticatorSelection: {
-              authenticatorAttachment:
-                "platform",
-              residentKey: "preferred",
-              userVerification:
-                "required",
-            },
-
-            timeout: 60000,
-
-            attestation: "none",
-          },
-        });
-
-      if (!credential) {
-        setError(
-          "Biometric registration was cancelled."
-        );
-        return;
-      }
-
-      setBiometricVerified(true);
-
-      setMessage(
-        "✓ Fingerprint / Biometric registered successfully."
-      );
-    } catch (err) {
-      console.error(
-        "Biometric registration error:",
-        err
-      );
-
-      setBiometricVerified(false);
-
-      setError(
-        "Fingerprint / biometric registration was cancelled or failed."
-      );
-    }
-  };
-
-  // --------------------------------
   // GET LOCATION
   // --------------------------------
 
@@ -374,6 +244,20 @@ export default function CheckInPage() {
       return false;
     }
 
+    if (!password.trim()) {
+      setError(
+        "Employee Password is required."
+      );
+      return false;
+    }
+
+    if (password.length < 6) {
+      setError(
+        "Employee Password must be at least 6 characters."
+      );
+      return false;
+    }
+
     if (!employeeName.trim()) {
       setError(
         "Employee Name is required."
@@ -412,13 +296,6 @@ export default function CheckInPage() {
       return false;
     }
 
-    if (!biometricVerified) {
-      setError(
-        "Fingerprint / biometric registration is compulsory."
-      );
-      return false;
-    }
-
     if (
       latitude === null ||
       longitude === null
@@ -433,7 +310,7 @@ export default function CheckInPage() {
   };
 
   // --------------------------------
-  // REGISTER AND CHECK-IN
+  // CHECK-IN
   // --------------------------------
 
   const markAttendance = async () => {
@@ -446,6 +323,10 @@ export default function CheckInPage() {
 
     try {
       setLoading(true);
+
+      setMessage(
+        "Verifying Employee ID and Password..."
+      );
 
       const response = await fetch(
         `${API_URL}/api/attendance`,
@@ -461,23 +342,12 @@ export default function CheckInPage() {
             employeeId:
               employeeId.trim(),
 
-            employeeName:
-              employeeName.trim(),
-
-            department:
-              department.trim(),
-
-            email:
-              email.trim(),
+            password,
 
             latitude,
             longitude,
 
             status: "Present",
-
-            photoCaptured: true,
-
-            biometricVerified: true,
           }),
         }
       );
@@ -488,19 +358,24 @@ export default function CheckInPage() {
       if (!response.ok) {
         setError(
           data.message ||
-            "Registration / Check-In failed."
+            "Check-In failed."
         );
+        setMessage("");
         return;
       }
 
       setMessage(
-        "✓ Employee registered and CHECK-IN completed successfully."
+        "✓ Attendance marked successfully. Check-In completed."
       );
+
+      setPassword("");
     } catch (err) {
       console.error(
         "Attendance error:",
         err
       );
+
+      setMessage("");
 
       setError(
         "Unable to connect to the attendance server."
@@ -524,7 +399,7 @@ export default function CheckInPage() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-600">
-            Employee Registration & Check-In
+            Employee Check-In
           </p>
 
         </div>
@@ -569,8 +444,32 @@ export default function CheckInPage() {
             }
             placeholder="Enter Employee ID"
             required
+            autoComplete="username"
             className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
           />
+
+          {/* PASSWORD */}
+
+          <label className="mt-4 block text-sm font-semibold">
+            Employee Password *
+          </label>
+
+          <input
+            type="password"
+            value={password}
+            onChange={(e) =>
+              setPassword(e.target.value)
+            }
+            placeholder="Enter Employee Password"
+            required
+            minLength={6}
+            autoComplete="current-password"
+            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+          />
+
+          <p className="mt-2 text-xs text-slate-500">
+            Password is verified securely by the attendance server.
+          </p>
 
           {/* NAME */}
 
@@ -712,50 +611,13 @@ export default function CheckInPage() {
         </section>
 
         {/* -------------------------------- */}
-        {/* FINGERPRINT / BIOMETRIC */}
-        {/* -------------------------------- */}
-
-        <section className="mt-8">
-
-          <h2 className="text-lg font-semibold text-slate-900">
-            3. Employee Fingerprint / Biometric *
-          </h2>
-
-          <p className="mt-1 text-sm text-slate-500">
-            Employee must complete device biometric verification.
-          </p>
-
-          <button
-            type="button"
-            onClick={registerBiometric}
-            disabled={biometricVerified}
-            className={`mt-4 w-full rounded-lg px-4 py-4 font-semibold text-white ${
-              biometricVerified
-                ? "bg-green-600"
-                : "bg-orange-500 hover:bg-orange-600"
-            }`}
-          >
-            {biometricVerified
-              ? "✓ Fingerprint / Biometric Registered"
-              : "👆 Register Fingerprint / Biometric"}
-          </button>
-
-          {biometricVerified && (
-            <div className="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-700">
-              ✓ Employee biometric verification completed.
-            </div>
-          )}
-
-        </section>
-
-        {/* -------------------------------- */}
         {/* LOCATION */}
         {/* -------------------------------- */}
 
         <section className="mt-8">
 
           <h2 className="text-lg font-semibold text-slate-900">
-            4. Employee Location *
+            3. Employee Location *
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
@@ -792,7 +654,7 @@ export default function CheckInPage() {
         </section>
 
         {/* -------------------------------- */}
-        {/* REGISTER & CHECK-IN */}
+        {/* CHECK-IN */}
         {/* -------------------------------- */}
 
         <section className="mt-8">
@@ -804,8 +666,8 @@ export default function CheckInPage() {
             className="w-full rounded-lg bg-green-600 px-4 py-4 text-lg font-bold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
-              ? "Processing..."
-              : "✓ REGISTER & CHECK IN"}
+              ? "Verifying & Checking In..."
+              : "✓ CHECK IN"}
           </button>
 
         </section>
@@ -826,6 +688,12 @@ export default function CheckInPage() {
               {employeeId.trim()
                 ? "✓"
                 : "○"} Employee ID
+            </li>
+
+            <li>
+              {password.trim()
+                ? "✓"
+                : "○"} Employee Password
             </li>
 
             <li>
@@ -850,12 +718,6 @@ export default function CheckInPage() {
               {photoCaptured
                 ? "✓"
                 : "○"} Employee Photo
-            </li>
-
-            <li>
-              {biometricVerified
-                ? "✓"
-                : "○"} Fingerprint / Biometric
             </li>
 
             <li>

@@ -1,15 +1,28 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcrypt");
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// GET all employees
+// ======================================================
+// GET ALL EMPLOYEES
+// ======================================================
 router.get("/", async (req, res) => {
   try {
     const employees = await prisma.employee.findMany({
       orderBy: {
         id: "desc",
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        name: true,
+        email: true,
+        department: true,
+        photoUrl: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
@@ -28,14 +41,33 @@ router.get("/", async (req, res) => {
   }
 });
 
-// GET employee by ID
+// ======================================================
+// GET EMPLOYEE BY DATABASE ID
+// ======================================================
 router.get("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
 
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid employee ID.",
+      });
+    }
+
     const employee = await prisma.employee.findUnique({
       where: {
         id,
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        name: true,
+        email: true,
+        department: true,
+        photoUrl: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
@@ -61,7 +93,9 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST new employee
+// ======================================================
+// POST - REGISTER NEW EMPLOYEE
+// ======================================================
 router.post("/", async (req, res) => {
   try {
     const {
@@ -69,9 +103,14 @@ router.post("/", async (req, res) => {
       name,
       email,
       department,
+      password,
+      confirmPassword,
       photoUrl,
     } = req.body;
 
+    // --------------------------------------------------
+    // 1. Validate required fields
+    // --------------------------------------------------
     if (!employeeId || !name || !email || !department) {
       return res.status(400).json({
         success: false,
@@ -80,11 +119,43 @@ router.post("/", async (req, res) => {
       });
     }
 
+    // --------------------------------------------------
+    // 2. Password is compulsory
+    // --------------------------------------------------
+    if (!password || !password.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee Password is required.",
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Employee Password must be at least 6 characters.",
+      });
+    }
+
+    if (confirmPassword !== undefined && password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee Password and Confirm Password do not match.",
+      });
+    }
+
+    // --------------------------------------------------
+    // 3. Check duplicate employee
+    // --------------------------------------------------
     const existingEmployee = await prisma.employee.findFirst({
       where: {
         OR: [
-          { employeeId },
-          { email },
+          {
+            employeeId: employeeId.trim(),
+          },
+          {
+            email: email.trim(),
+          },
         ],
       },
     });
@@ -96,16 +167,38 @@ router.post("/", async (req, res) => {
       });
     }
 
+    // --------------------------------------------------
+    // 4. Hash password
+    // --------------------------------------------------
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // --------------------------------------------------
+    // 5. Create employee
+    // --------------------------------------------------
     const employee = await prisma.employee.create({
       data: {
-        employeeId,
-        name,
-        email,
-        department,
+        employeeId: employeeId.trim(),
+        name: name.trim(),
+        email: email.trim(),
+        department: department.trim(),
+        passwordHash,
         photoUrl: photoUrl || null,
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        name: true,
+        email: true,
+        department: true,
+        photoUrl: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
+    // --------------------------------------------------
+    // 6. Success response
+    // --------------------------------------------------
     res.status(201).json({
       success: true,
       message: "Employee registered successfully.",
