@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const API_URL = "https://discovery-office-regulation-motherboard.trycloudflare.com";
+const API_URL = "https://attendance-backend-2nky.onrender.com";
 
 export default function CheckInPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);

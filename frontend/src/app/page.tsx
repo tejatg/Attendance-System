@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-const API_URL = "https://discovery-office-regulation-motherboard.trycloudflare.com";
+const API_URL = "https://attendance-backend-2nky.onrender.com";
 
 type Employee = {
   id: number;
@@ -52,7 +52,7 @@ export default function Home() {
     } catch (err) {
       console.error(err);
       setError(
-        "Unable to connect to the backend. Make sure the backend is running on port 5000."
+        "Unable to connect to the attendance server. Please try again."
       );
     } finally {
       setLoading(false);
@@ -97,14 +97,18 @@ export default function Home() {
       <header className="bg-slate-900 text-white shadow-lg">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
           <div>
-            <h1 className="text-2xl font-bold">Smart Attendance</h1>
+            <h1 className="text-2xl font-bold">
+              TALENTRONAUT PVT LTD
+            </h1>
+
             <p className="text-sm text-slate-300">
-              Employee Attendance Management System
+              Smart Employee Attendance Management System
             </p>
           </div>
 
           <div className="text-right">
             <p className="text-sm text-slate-300">Today</p>
+
             <p className="font-semibold">
               {new Date().toLocaleDateString("en-IN", {
                 day: "2-digit",
@@ -192,21 +196,21 @@ export default function Home() {
                 href="/employees"
                 className="rounded-xl bg-blue-600 px-6 py-4 text-center font-semibold text-white shadow transition hover:bg-blue-700"
               >
-                👤 Register Employee
+                Register Employee
               </Link>
 
               <Link
                 href="/employees"
                 className="rounded-xl bg-white px-6 py-4 text-center font-semibold text-slate-800 shadow transition hover:bg-slate-50"
               >
-                👥 Employee Management
+                Employee Management
               </Link>
 
               <button
                 onClick={loadDashboard}
                 className="rounded-xl bg-white px-6 py-4 font-semibold text-slate-800 shadow transition hover:bg-slate-50"
               >
-                🔄 Refresh Attendance
+                Refresh Attendance
               </button>
             </div>
 
@@ -218,7 +222,7 @@ export default function Home() {
                 </h3>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Live attendance records from the backend
+                  Live attendance records from the production backend
                 </p>
               </div>
 

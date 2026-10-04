@@ -12,8 +12,7 @@ type Employee = {
 };
 
 // Public backend URL
-const API_URL =
-  "https://discovery-office-regulation-motherboard.trycloudflare.com";
+const API_URL = "https://attendance-backend-2nky.onrender.com";
 
 export default function EmployeeRegistration() {
   const [employees, setEmployees] = useState<Employee[]>([]);

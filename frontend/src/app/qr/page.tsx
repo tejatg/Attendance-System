@@ -3,7 +3,7 @@
 import { QRCodeCanvas } from "qrcode.react";
 
 const ATTENDANCE_URL =
-  "https://10.174.80.71:3015/attendance/check-in";
+  "https://attendance-system-omega-beryl-95.vercel.app/attendance/check-in";
 
 export default function QRPage() {
   return (
@@ -11,7 +11,7 @@ export default function QRPage() {
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl text-center">
 
         <h1 className="text-3xl font-bold text-slate-900">
-          Parikh Renewable Pvt Ltd
+          TALENTRONAUT PVT LTD
         </h1>
 
         <h2 className="mt-2 text-xl font-semibold text-slate-700">
