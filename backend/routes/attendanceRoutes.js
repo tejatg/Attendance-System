@@ -50,13 +50,16 @@ router.get("/", async (req, res) => {
 /*
 ========================================
 CHECK IN
+Employee ID removed from frontend
+Uses Employee Name + Department + Password
 ========================================
 */
 
 router.post("/", async (req, res) => {
   try {
     const {
-      employeeId,
+      name,
+      department,
       password,
       status,
       checkIn,
@@ -65,12 +68,31 @@ router.post("/", async (req, res) => {
       longitude,
     } = req.body;
 
-    if (!employeeId || !employeeId.trim()) {
+    /*
+    VALIDATE EMPLOYEE NAME
+    */
+
+    if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
-        message: "Employee ID is required.",
+        message: "Employee Name is required.",
       });
     }
+
+    /*
+    VALIDATE DEPARTMENT
+    */
+
+    if (!department || !department.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee Department is required.",
+      });
+    }
+
+    /*
+    VALIDATE PASSWORD
+    */
 
     if (!password || !password.trim()) {
       return res.status(400).json({
@@ -79,18 +101,38 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const employee = await prisma.employee.findUnique({
+    /*
+    FIND EMPLOYEE
+    */
+
+    const employee = await prisma.employee.findFirst({
       where: {
-        employeeId: employeeId.trim(),
+        name: {
+          equals: name.trim(),
+          mode: "insensitive",
+        },
+        department: {
+          equals: department.trim(),
+          mode: "insensitive",
+        },
       },
     });
+
+    /*
+    EMPLOYEE NOT FOUND
+    */
 
     if (!employee) {
       return res.status(401).json({
         success: false,
-        message: "Invalid Employee ID or Password.",
+        message:
+          "Invalid Employee Name or Department.",
       });
     }
+
+    /*
+    CHECK PASSWORD CONFIGURATION
+    */
 
     if (!employee.passwordHash) {
       return res.status(403).json({
@@ -100,6 +142,10 @@ router.post("/", async (req, res) => {
       });
     }
 
+    /*
+    VERIFY PASSWORD
+    */
+
     const passwordValid = await bcrypt.compare(
       password,
       employee.passwordHash
@@ -108,7 +154,8 @@ router.post("/", async (req, res) => {
     if (!passwordValid) {
       return res.status(401).json({
         success: false,
-        message: "Invalid Employee ID or Password.",
+        message:
+          "Invalid Employee Name, Department or Password.",
       });
     }
 
@@ -216,7 +263,8 @@ router.post("/", async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: "Attendance marked successfully.",
+      message:
+        "Attendance marked successfully.",
       attendance,
     });
   } catch (error) {
@@ -233,6 +281,7 @@ router.post("/", async (req, res) => {
 /*
 ========================================
 CHECK OUT
+Employee ID + Password
 ========================================
 */
 
@@ -282,7 +331,8 @@ router.put("/checkout/:employeeId", async (req, res) => {
     if (!employee) {
       return res.status(401).json({
         success: false,
-        message: "Invalid Employee ID or Password.",
+        message:
+          "Invalid Employee ID or Password.",
       });
     }
 
@@ -311,7 +361,8 @@ router.put("/checkout/:employeeId", async (req, res) => {
     if (!passwordValid) {
       return res.status(401).json({
         success: false,
-        message: "Invalid Employee ID or Password.",
+        message:
+          "Invalid Employee ID or Password.",
       });
     }
 

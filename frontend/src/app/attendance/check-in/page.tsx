@@ -8,36 +8,27 @@ export default function CheckInPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const [employeeId, setEmployeeId] = useState("");
+  const [name, setName] = useState("");
+  const [department, setDepartment] = useState("");
   const [password, setPassword] = useState("");
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStream, setCameraStream] =
     useState<MediaStream | null>(null);
 
-  const [photoCaptured, setPhotoCaptured] =
-    useState(false);
-  const [photoPreview, setPhotoPreview] =
-    useState("");
+  const [photoCaptured, setPhotoCaptured] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState("");
 
-  const [latitude, setLatitude] =
-    useState<number | null>(null);
-  const [longitude, setLongitude] =
-    useState<number | null>(null);
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // --------------------------------
-  // STOP CAMERA
-  // --------------------------------
-
   const stopCamera = () => {
     if (cameraStream) {
-      cameraStream.getTracks().forEach((track) => {
-        track.stop();
-      });
+      cameraStream.getTracks().forEach((track) => track.stop());
     }
 
     setCameraStream(null);
@@ -47,16 +38,10 @@ export default function CheckInPage() {
   useEffect(() => {
     return () => {
       if (cameraStream) {
-        cameraStream.getTracks().forEach((track) => {
-          track.stop();
-        });
+        cameraStream.getTracks().forEach((track) => track.stop());
       }
     };
   }, [cameraStream]);
-
-  // --------------------------------
-  // OPEN CAMERA
-  // --------------------------------
 
   const openCamera = async () => {
     setError("");
@@ -64,21 +49,18 @@ export default function CheckInPage() {
 
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        setError(
-          "Camera is not supported by this browser."
-        );
+        setError("Camera is not supported by this browser.");
         return;
       }
 
-      const stream =
-        await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-          audio: false,
-        });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
 
       setCameraStream(stream);
       setCameraOpen(true);
@@ -101,10 +83,6 @@ export default function CheckInPage() {
     }
   };
 
-  // --------------------------------
-  // CAPTURE PHOTO
-  // --------------------------------
-
   const capturePhoto = () => {
     setError("");
     setMessage("");
@@ -117,13 +95,8 @@ export default function CheckInPage() {
       return;
     }
 
-    if (
-      video.videoWidth === 0 ||
-      video.videoHeight === 0
-    ) {
-      setError(
-        "Camera is not ready. Please wait a moment."
-      );
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      setError("Camera is not ready. Please wait a moment.");
       return;
     }
 
@@ -145,22 +118,15 @@ export default function CheckInPage() {
       canvas.height
     );
 
-    const image =
-      canvas.toDataURL("image/jpeg", 0.9);
+    const image = canvas.toDataURL("image/jpeg", 0.9);
 
     setPhotoPreview(image);
     setPhotoCaptured(true);
 
     stopCamera();
 
-    setMessage(
-      "✓ Employee photo captured successfully."
-    );
+    setMessage("✓ Employee photo captured successfully.");
   };
-
-  // --------------------------------
-  // RETAKE PHOTO
-  // --------------------------------
 
   const retakePhoto = () => {
     setPhotoPreview("");
@@ -171,45 +137,26 @@ export default function CheckInPage() {
     openCamera();
   };
 
-  // --------------------------------
-  // GET MY LOCATION - OPTIONAL
-  // --------------------------------
-
   const getCurrentLocation = () => {
     setError("");
     setMessage("");
 
     if (!navigator.geolocation) {
-      setError(
-        "GPS is not supported by this browser."
-      );
+      setError("GPS is not supported by this browser.");
       return;
     }
 
-    setMessage(
-      "📍 Requesting your current location..."
-    );
+    setMessage("📍 Requesting your current location...");
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const currentLatitude =
-          position.coords.latitude;
+        setLatitude(position.coords.latitude);
+        setLongitude(position.coords.longitude);
 
-        const currentLongitude =
-          position.coords.longitude;
-
-        setLatitude(currentLatitude);
-        setLongitude(currentLongitude);
-
-        setMessage(
-          "✓ Location captured successfully."
-        );
+        setMessage("✓ Location captured successfully.");
       },
       (err) => {
-        console.error(
-          "Location error:",
-          err
-        );
+        console.error("Location error:", err);
 
         if (err.code === 1) {
           setError(
@@ -239,20 +186,19 @@ export default function CheckInPage() {
     );
   };
 
-  // --------------------------------
-  // CHECK-IN VALIDATION
-  // --------------------------------
-
   const validateForm = () => {
-    if (!employeeId.trim()) {
-      setError("Employee ID is required.");
+    if (!name.trim()) {
+      setError("Employee Name is required.");
+      return false;
+    }
+
+    if (!department.trim()) {
+      setError("Employee Department is required.");
       return false;
     }
 
     if (!password.trim()) {
-      setError(
-        "Employee Password is required."
-      );
+      setError("Employee Password is required.");
       return false;
     }
 
@@ -270,17 +216,10 @@ export default function CheckInPage() {
       return false;
     }
 
-    // Mobile Location is OPTIONAL.
-    // No location validation is performed here.
-
     return true;
   };
 
-  // --------------------------------
-  // CHECK-IN
-  // --------------------------------
-
-  const markAttendance = async () => {
+  const markCheckIn = async () => {
     setError("");
     setMessage("");
 
@@ -292,42 +231,32 @@ export default function CheckInPage() {
       setLoading(true);
 
       setMessage(
-        "Verifying Employee ID and Password..."
+        "Verifying Employee Name, Department and Password..."
       );
 
       const response = await fetch(
         `${API_URL}/api/attendance`,
         {
           method: "POST",
-
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
-
           body: JSON.stringify({
-            employeeId:
-              employeeId.trim(),
-
+            name: name.trim(),
+            department: department.trim(),
             password,
-
             latitude,
             longitude,
-
-            status: "Present",
           }),
         }
       );
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         setError(
-          data.message ||
-            "Check-In failed."
+          data.message || "Check-In failed."
         );
-
         setMessage("");
         return;
       }
@@ -338,10 +267,7 @@ export default function CheckInPage() {
 
       setPassword("");
     } catch (err) {
-      console.error(
-        "Attendance error:",
-        err
-      );
+      console.error("Check-In error:", err);
 
       setMessage("");
 
@@ -353,30 +279,19 @@ export default function CheckInPage() {
     }
   };
 
-  // --------------------------------
-  // PAGE
-  // --------------------------------
-
   return (
     <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
-
       <div className="mx-auto max-w-lg rounded-2xl bg-white p-6 shadow-xl">
 
-        {/* HEADER */}
-
         <div className="text-center">
-
           <h1 className="text-2xl font-bold text-slate-900">
-            Smart Attendance System
+            TALENTRONAUT PVT LTD
           </h1>
 
           <p className="mt-2 text-sm text-slate-600">
             Employee Check-In
           </p>
-
         </div>
-
-        {/* ERROR */}
 
         {error && (
           <div className="mt-5 rounded-lg bg-red-50 p-4 text-sm font-medium text-red-700">
@@ -384,43 +299,45 @@ export default function CheckInPage() {
           </div>
         )}
 
-        {/* SUCCESS */}
-
         {message && (
           <div className="mt-5 rounded-lg bg-green-50 p-4 text-sm font-medium text-green-700">
             {message}
           </div>
         )}
 
-        {/* -------------------------------- */}
         {/* EMPLOYEE INFORMATION */}
-        {/* -------------------------------- */}
 
         <section className="mt-6">
-
           <h2 className="text-lg font-semibold text-slate-900">
-            1. Employee Information *
+            1. Employee Information
           </h2>
 
-          {/* EMPLOYEE ID */}
-
           <label className="mt-4 block text-sm font-semibold">
-            Employee ID *
+            Employee Name *
           </label>
 
           <input
             type="text"
-            value={employeeId}
-            onChange={(e) =>
-              setEmployeeId(e.target.value)
-            }
-            placeholder="Enter Employee ID"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Enter Employee Name"
             required
-            autoComplete="username"
+            autoComplete="name"
             className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
           />
 
-          {/* PASSWORD */}
+          <label className="mt-4 block text-sm font-semibold">
+            Employee Department *
+          </label>
+
+          <input
+            type="text"
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
+            placeholder="Enter Employee Department"
+            required
+            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+          />
 
           <label className="mt-4 block text-sm font-semibold">
             Employee Password *
@@ -429,9 +346,7 @@ export default function CheckInPage() {
           <input
             type="password"
             value={password}
-            onChange={(e) =>
-              setPassword(e.target.value)
-            }
+            onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter Employee Password"
             required
             minLength={6}
@@ -442,15 +357,11 @@ export default function CheckInPage() {
           <p className="mt-2 text-xs text-slate-500">
             Password is securely verified by the attendance server.
           </p>
-
         </section>
 
-        {/* -------------------------------- */}
         {/* EMPLOYEE PHOTO */}
-        {/* -------------------------------- */}
 
         <section className="mt-8">
-
           <h2 className="text-lg font-semibold text-slate-900">
             2. Employee Photo *
           </h2>
@@ -459,21 +370,19 @@ export default function CheckInPage() {
             Employee photo is compulsory.
           </p>
 
-          {!cameraOpen &&
-            !photoCaptured && (
-              <button
-                type="button"
-                onClick={openCamera}
-                disabled={loading}
-                className="mt-4 w-full rounded-lg bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
-              >
-                📷 Open Camera
-              </button>
-            )}
+          {!cameraOpen && !photoCaptured && (
+            <button
+              type="button"
+              onClick={openCamera}
+              disabled={loading}
+              className="mt-4 w-full rounded-lg bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
+            >
+              📷 Open Camera
+            </button>
+          )}
 
           {cameraOpen && (
             <div className="mt-4">
-
               <video
                 ref={videoRef}
                 autoPlay
@@ -497,18 +406,13 @@ export default function CheckInPage() {
               >
                 Cancel Camera
               </button>
-
             </div>
           )}
 
-          <canvas
-            ref={canvasRef}
-            className="hidden"
-          />
+          <canvas ref={canvasRef} className="hidden" />
 
           {photoPreview && (
             <div className="mt-4">
-
               <img
                 src={photoPreview}
                 alt="Employee captured photo"
@@ -527,146 +431,88 @@ export default function CheckInPage() {
               >
                 🔄 Retake Photo
               </button>
-
             </div>
           )}
-
         </section>
 
-        {/* -------------------------------- */}
-        {/* MOBILE LOCATION - OPTIONAL */}
-        {/* -------------------------------- */}
+        {/* MOBILE LOCATION */}
 
         <section className="mt-8">
-
           <h2 className="text-lg font-semibold text-slate-900">
-            3. Mobile Location (Optional)
+            3. Mobile Location
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            You may capture your current mobile location if you want to save it with your attendance.
+            Mobile location is optional.
           </p>
 
           <button
             type="button"
             onClick={getCurrentLocation}
             disabled={loading}
-            className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
             📍 Get My Location
           </button>
 
-          {latitude !== null &&
-            longitude !== null && (
-              <div className="mt-4 rounded-lg bg-green-50 p-4 text-sm">
+          {latitude !== null && longitude !== null && (
+            <div className="mt-4 rounded-lg bg-green-50 p-4 text-sm">
+              <p>Latitude: {latitude}</p>
+              <p>Longitude: {longitude}</p>
 
-                <p>
-                  Latitude: {latitude}
-                </p>
-
-                <p>
-                  Longitude: {longitude}
-                </p>
-
-                <p className="mt-2 font-semibold text-green-600">
-                  ✓ Location Captured
-                </p>
-
-              </div>
-            )}
-
-          {latitude === null &&
-            longitude === null && (
-              <p className="mt-3 text-xs text-slate-500">
-                Location is optional. You can Check In without providing your location.
+              <p className="mt-2 font-semibold text-green-600">
+                ✓ Location Captured
               </p>
-            )}
+            </div>
+          )}
 
+          {latitude === null && longitude === null && (
+            <p className="mt-3 text-xs text-slate-500">
+              You can Check In without providing your location.
+            </p>
+          )}
         </section>
 
-        {/* -------------------------------- */}
         {/* CHECK IN */}
-        {/* -------------------------------- */}
 
         <section className="mt-8">
-
           <button
             type="button"
-            onClick={markAttendance}
+            onClick={markCheckIn}
             disabled={loading}
-            className="w-full rounded-lg bg-green-600 px-4 py-4 text-lg font-bold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-lg bg-blue-600 px-4 py-4 text-lg font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading
-              ? "Saving Attendance..."
-              : "✓ CHECK IN"}
+            {loading ? "Saving Attendance..." : "CHECK IN"}
           </button>
-
         </section>
 
-        {/* -------------------------------- */}
-        {/* CHECK-IN REQUIREMENTS */}
-        {/* -------------------------------- */}
-
         <div className="mt-6 rounded-xl bg-slate-50 p-4">
-
           <p className="font-semibold text-slate-900">
             Check-In Requirements
           </p>
 
           <ul className="mt-3 space-y-2 text-sm">
-
             <li>
-              {employeeId.trim()
-                ? "✓"
-                : "○"} Employee ID
+              {name.trim() ? "✓" : "○"} Employee Name
             </li>
 
             <li>
-              {password.trim()
-                ? "✓"
-                : "○"} Employee Password
+              {department.trim() ? "✓" : "○"} Employee Department
             </li>
 
             <li>
-              {photoCaptured
-                ? "✓"
-                : "○"} Employee Photo
+              {password.trim() ? "✓" : "○"} Employee Password
             </li>
 
             <li>
-              ✓ Mobile Location (Optional)
+              {photoCaptured ? "✓" : "○"} Employee Photo
             </li>
 
+            <li>✓ Mobile Location (Optional)</li>
           </ul>
-
-        </div>
-
-        {/* -------------------------------- */}
-        {/* LOCATION NOTE */}
-        {/* -------------------------------- */}
-
-        <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800">
-
-          <p className="font-semibold">
-            📍 Location Information
-          </p>
-
-          <p className="mt-2">
-            Mobile location is optional. Employees can Check In without allowing location access.
-          </p>
-
-          <p className="mt-2">
-            If Get My Location is used, the captured latitude and longitude will be saved with the attendance record.
-          </p>
-
-          <p className="mt-2">
-            No distance or radius restriction is applied.
-          </p>
-
         </div>
 
       </div>
-
     </main>
   );
 }
