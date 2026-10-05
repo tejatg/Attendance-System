@@ -8,7 +8,8 @@ export default function CheckOutPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const [employeeId, setEmployeeId] = useState("");
+  const [name, setName] = useState("");
+  const [department, setDepartment] = useState("");
   const [password, setPassword] = useState("");
 
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -24,6 +25,7 @@ export default function CheckOutPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkOutCompleted, setCheckOutCompleted] = useState(false);
 
   const stopCamera = () => {
     if (cameraStream) {
@@ -43,6 +45,10 @@ export default function CheckOutPage() {
   }, [cameraStream]);
 
   const openCamera = async () => {
+    if (checkOutCompleted) {
+      return;
+    }
+
     setError("");
     setMessage("");
 
@@ -124,10 +130,14 @@ export default function CheckOutPage() {
 
     stopCamera();
 
-    setMessage("✓ Employee photo captured successfully.");
+    setMessage("Employee photo captured successfully.");
   };
 
   const retakePhoto = () => {
+    if (checkOutCompleted) {
+      return;
+    }
+
     setPhotoPreview("");
     setPhotoCaptured(false);
     setError("");
@@ -137,6 +147,10 @@ export default function CheckOutPage() {
   };
 
   const getCurrentLocation = () => {
+    if (checkOutCompleted) {
+      return;
+    }
+
     setError("");
     setMessage("");
 
@@ -145,14 +159,14 @@ export default function CheckOutPage() {
       return;
     }
 
-    setMessage("📍 Requesting your current location...");
+    setMessage("Requesting your current location...");
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLatitude(position.coords.latitude);
         setLongitude(position.coords.longitude);
 
-        setMessage("✓ Location captured successfully.");
+        setMessage("Location captured successfully.");
       },
       (err) => {
         console.error("Location error:", err);
@@ -186,8 +200,13 @@ export default function CheckOutPage() {
   };
 
   const validateForm = () => {
-    if (!employeeId.trim()) {
-      setError("Employee ID is required.");
+    if (!name.trim()) {
+      setError("Employee Name is required.");
+      return false;
+    }
+
+    if (!department.trim()) {
+      setError("Employee Department is required.");
       return false;
     }
 
@@ -214,6 +233,10 @@ export default function CheckOutPage() {
   };
 
   const markCheckOut = async () => {
+    if (checkOutCompleted) {
+      return;
+    }
+
     setError("");
     setMessage("");
 
@@ -225,22 +248,22 @@ export default function CheckOutPage() {
       setLoading(true);
 
       setMessage(
-        "Verifying Employee ID and Password..."
+        "Verifying Employee Name, Department and Password..."
       );
 
       const response = await fetch(
-        `${API_URL}/api/attendance/checkout/${encodeURIComponent(
-          employeeId.trim()
-        )}`,
+        API_URL + "/api/attendance/checkout",
         {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            password,
-            latitude,
-            longitude,
+            name: name.trim(),
+            department: department.trim(),
+            password: password,
+            latitude: latitude,
+            longitude: longitude,
           }),
         }
       );
@@ -253,11 +276,15 @@ export default function CheckOutPage() {
         return;
       }
 
+      setCheckOutCompleted(true);
+
       setMessage(
-        "✓ Attendance saved successfully. Check-Out completed."
+        "Attendance marked successfully. Check-Out completed."
       );
 
       setPassword("");
+
+      stopCamera();
     } catch (err) {
       console.error("Check-Out error:", err);
 
@@ -277,7 +304,7 @@ export default function CheckOutPage() {
 
         <div className="text-center">
           <h1 className="text-2xl font-bold text-slate-900">
-            Smart Attendance System
+            TALENTRONAUT PVT LTD
           </h1>
 
           <p className="mt-2 text-sm text-slate-600">
@@ -287,7 +314,7 @@ export default function CheckOutPage() {
 
         {error && (
           <div className="mt-5 rounded-lg bg-red-50 p-4 text-sm font-medium text-red-700">
-            ❌ {error}
+            {error}
           </div>
         )}
 
@@ -299,21 +326,37 @@ export default function CheckOutPage() {
 
         <section className="mt-6">
           <h2 className="text-lg font-semibold text-slate-900">
-            1. Employee Information *
+            1. Employee Information
           </h2>
 
           <label className="mt-4 block text-sm font-semibold">
-            Employee ID *
+            Employee Name *
           </label>
 
           <input
             type="text"
-            value={employeeId}
-            onChange={(e) => setEmployeeId(e.target.value)}
-            placeholder="Enter Employee ID"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Enter Employee Name"
             required
-            autoComplete="username"
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500"
+            disabled={loading || checkOutCompleted}
+            autoComplete="name"
+            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+          />
+
+          <label className="mt-4 block text-sm font-semibold">
+            Employee Department *
+          </label>
+
+          <input
+            type="text"
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
+            placeholder="Enter Employee Department"
+            required
+            disabled={loading || checkOutCompleted}
+            autoComplete="organization"
+            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:bg-slate-100"
           />
 
           <label className="mt-4 block text-sm font-semibold">
@@ -327,8 +370,9 @@ export default function CheckOutPage() {
             placeholder="Enter Employee Password"
             required
             minLength={6}
+            disabled={loading || checkOutCompleted}
             autoComplete="current-password"
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500"
+            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:bg-slate-100"
           />
 
           <p className="mt-2 text-xs text-slate-500">
@@ -349,10 +393,10 @@ export default function CheckOutPage() {
             <button
               type="button"
               onClick={openCamera}
-              disabled={loading}
-              className="mt-4 w-full rounded-lg bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
+              disabled={loading || checkOutCompleted}
+              className="mt-4 w-full rounded-lg bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              📷 Open Camera
+              Open Camera
             </button>
           )}
 
@@ -369,15 +413,17 @@ export default function CheckOutPage() {
               <button
                 type="button"
                 onClick={capturePhoto}
-                className="mt-4 w-full rounded-lg bg-green-600 px-4 py-3 font-semibold text-white"
+                disabled={checkOutCompleted}
+                className="mt-4 w-full rounded-lg bg-green-600 px-4 py-3 font-semibold text-white disabled:opacity-50"
               >
-                📸 Capture Photo
+                Capture Photo
               </button>
 
               <button
                 type="button"
                 onClick={stopCamera}
-                className="mt-3 w-full rounded-lg border px-4 py-3"
+                disabled={checkOutCompleted}
+                className="mt-3 w-full rounded-lg border px-4 py-3 disabled:opacity-50"
               >
                 Cancel Camera
               </button>
@@ -395,16 +441,16 @@ export default function CheckOutPage() {
               />
 
               <p className="mt-2 text-center font-semibold text-green-600">
-                ✓ Photo Captured
+                Photo Captured
               </p>
 
               <button
                 type="button"
                 onClick={retakePhoto}
-                disabled={loading}
-                className="mt-3 w-full rounded-lg border px-4 py-3 disabled:opacity-50"
+                disabled={loading || checkOutCompleted}
+                className="mt-3 w-full rounded-lg border px-4 py-3 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                🔄 Retake Photo
+                Retake Photo
               </button>
             </div>
           )}
@@ -423,10 +469,10 @@ export default function CheckOutPage() {
           <button
             type="button"
             onClick={getCurrentLocation}
-            disabled={loading}
-            className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            disabled={loading || checkOutCompleted}
+            className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            📍 Get My Location
+            Get My Location
           </button>
 
           {latitude !== null && longitude !== null && (
@@ -435,14 +481,14 @@ export default function CheckOutPage() {
               <p>Longitude: {longitude}</p>
 
               <p className="mt-2 font-semibold text-green-600">
-                ✓ Location Captured
+                Location Captured
               </p>
             </div>
           )}
 
           {latitude === null && longitude === null && (
             <p className="mt-3 text-xs text-slate-500">
-              Location is optional. You can Check Out without
+              Location is optional. You can Check-Out without
               providing your location.
             </p>
           )}
@@ -452,12 +498,19 @@ export default function CheckOutPage() {
           <button
             type="button"
             onClick={markCheckOut}
-            disabled={loading}
-            className="w-full rounded-lg bg-green-600 px-4 py-4 text-lg font-bold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={loading || checkOutCompleted}
+            className={
+              "w-full rounded-lg px-4 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-60 " +
+              (checkOutCompleted
+                ? "bg-green-700"
+                : "bg-green-600 hover:bg-green-700")
+            }
           >
-            {loading
+            {checkOutCompleted
+              ? "CHECKED OUT"
+              : loading
               ? "Saving Attendance..."
-              : "✓ CHECK OUT"}
+              : "CHECK OUT"}
           </button>
         </section>
 
@@ -468,28 +521,41 @@ export default function CheckOutPage() {
 
           <ul className="mt-3 space-y-2 text-sm">
             <li>
-              {employeeId.trim() ? "✓" : "○"} Employee ID
+              {name.trim() ? "Complete" : "Pending"} Employee Name
             </li>
 
             <li>
-              {password.trim() ? "✓" : "○"} Employee Password
+              {department.trim()
+                ? "Complete"
+                : "Pending"} Employee Department
             </li>
 
             <li>
-              {photoCaptured ? "✓" : "○"} Employee Photo
+              {password.trim()
+                ? "Complete"
+                : "Pending"} Employee Password
             </li>
 
-            <li>✓ Mobile Location (Optional)</li>
+            <li>
+              {photoCaptured
+                ? "Complete"
+                : "Pending"} Employee Photo
+            </li>
+
+            <li>
+              Mobile Location (Optional)
+            </li>
           </ul>
         </div>
 
         <div className="mt-5 rounded-xl border border-green-100 bg-green-50 p-4 text-xs text-green-800">
           <p className="font-semibold">
-            ✓ Check-Out Information
+            Check-Out Information
           </p>
 
           <p className="mt-2">
-            Employee ID and password are required before Check-Out.
+            Employee Name, Department and Password are required
+            before Check-Out.
           </p>
 
           <p className="mt-2">
@@ -502,7 +568,7 @@ export default function CheckOutPage() {
 
           <p className="mt-2">
             Check-Out records the current date and time against
-            the employee&apos;s active attendance.
+            the employee active attendance.
           </p>
         </div>
 

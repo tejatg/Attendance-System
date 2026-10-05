@@ -50,8 +50,7 @@ router.get("/", async (req, res) => {
 /*
 ========================================
 CHECK IN
-Employee ID removed from frontend
-Uses Employee Name + Department + Password
+Employee Name + Department + Password
 ========================================
 */
 
@@ -64,6 +63,189 @@ router.post("/", async (req, res) => {
       status,
       checkIn,
       checkOut,
+      latitude,
+      longitude,
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee Name is required.",
+      });
+    }
+
+    if (!department || !department.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee Department is required.",
+      });
+    }
+
+    if (!password || !password.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee Password is required.",
+      });
+    }
+
+    const employee = await prisma.employee.findFirst({
+      where: {
+        name: {
+          equals: name.trim(),
+          mode: "insensitive",
+        },
+        department: {
+          equals: department.trim(),
+          mode: "insensitive",
+        },
+      },
+    });
+
+    if (!employee) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid Employee Name or Department.",
+      });
+    }
+
+    if (!employee.passwordHash) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Employee password is not configured. Please contact your administrator.",
+      });
+    }
+
+    const passwordValid = await bcrypt.compare(
+      password,
+      employee.passwordHash
+    );
+
+    if (!passwordValid) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Invalid Employee Name, Department or Password.",
+      });
+    }
+
+    let userLatitude = null;
+    let userLongitude = null;
+
+    if (
+      latitude !== undefined &&
+      latitude !== null &&
+      latitude !== ""
+    ) {
+      const parsedLatitude = Number(latitude);
+
+      if (Number.isFinite(parsedLatitude)) {
+        userLatitude = parsedLatitude;
+      }
+    }
+
+    if (
+      longitude !== undefined &&
+      longitude !== null &&
+      longitude !== ""
+    ) {
+      const parsedLongitude = Number(longitude);
+
+      if (Number.isFinite(parsedLongitude)) {
+        userLongitude = parsedLongitude;
+      }
+    }
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const existingAttendance =
+      await prisma.attendance.findFirst({
+        where: {
+          employeeId: employee.employeeId,
+          date: {
+            gte: startOfDay,
+            lte: endOfDay,
+          },
+        },
+      });
+
+    if (existingAttendance) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Employee has already marked attendance today.",
+        attendance: existingAttendance,
+      });
+    }
+
+    const attendance =
+      await prisma.attendance.create({
+        data: {
+          employeeId: employee.employeeId,
+
+          status: status || "Present",
+
+          checkIn: checkIn
+            ? new Date(checkIn)
+            : new Date(),
+
+          checkOut: checkOut
+            ? new Date(checkOut)
+            : null,
+
+          latitude: userLatitude,
+          longitude: userLongitude,
+        },
+
+        include: {
+          employee: {
+            select: {
+              id: true,
+              employeeId: true,
+              name: true,
+              email: true,
+              department: true,
+              location: true,
+              photoUrl: true,
+            },
+          },
+        },
+      });
+
+    res.status(201).json({
+      success: true,
+      message: "Attendance marked successfully.",
+      attendance,
+    });
+  } catch (error) {
+    console.error("ATTENDANCE POST ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to mark attendance.",
+      error: error.message,
+    });
+  }
+});
+
+/*
+========================================
+CHECK OUT
+Employee Name + Department + Password
+Employee ID removed
+========================================
+*/
+
+router.put("/checkout", async (req, res) => {
+  try {
+    const {
+      name,
+      department,
+      password,
       latitude,
       longitude,
     } = req.body;
@@ -102,10 +284,10 @@ router.post("/", async (req, res) => {
     }
 
     /*
-    FIND EMPLOYEE
+    FIND EMPLOYEES
     */
 
-    const employee = await prisma.employee.findFirst({
+    const employees = await prisma.employee.findMany({
       where: {
         name: {
           equals: name.trim(),
@@ -122,23 +304,10 @@ router.post("/", async (req, res) => {
     EMPLOYEE NOT FOUND
     */
 
-    if (!employee) {
+    if (employees.length === 0) {
       return res.status(401).json({
         success: false,
-        message:
-          "Invalid Employee Name or Department.",
-      });
-    }
-
-    /*
-    CHECK PASSWORD CONFIGURATION
-    */
-
-    if (!employee.passwordHash) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Employee password is not configured. Please contact your administrator.",
+        message: "Invalid Employee Name or Department.",
       });
     }
 
@@ -146,12 +315,28 @@ router.post("/", async (req, res) => {
     VERIFY PASSWORD
     */
 
-    const passwordValid = await bcrypt.compare(
-      password,
-      employee.passwordHash
-    );
+    const matchingEmployees = [];
 
-    if (!passwordValid) {
+    for (const employee of employees) {
+      if (!employee.passwordHash) {
+        continue;
+      }
+
+      const passwordValid = await bcrypt.compare(
+        password,
+        employee.passwordHash
+      );
+
+      if (passwordValid) {
+        matchingEmployees.push(employee);
+      }
+    }
+
+    /*
+    PASSWORD DOES NOT MATCH
+    */
+
+    if (matchingEmployees.length === 0) {
       return res.status(401).json({
         success: false,
         message:
@@ -160,211 +345,18 @@ router.post("/", async (req, res) => {
     }
 
     /*
-    OPTIONAL GPS
+    MORE THAN ONE EMPLOYEE MATCHES
     */
 
-    let userLatitude = null;
-    let userLongitude = null;
-
-    if (
-      latitude !== undefined &&
-      latitude !== null &&
-      latitude !== ""
-    ) {
-      const parsedLatitude = Number(latitude);
-
-      if (Number.isFinite(parsedLatitude)) {
-        userLatitude = parsedLatitude;
-      }
-    }
-
-    if (
-      longitude !== undefined &&
-      longitude !== null &&
-      longitude !== ""
-    ) {
-      const parsedLongitude = Number(longitude);
-
-      if (Number.isFinite(parsedLongitude)) {
-        userLongitude = parsedLongitude;
-      }
-    }
-
-    /*
-    CHECK IF EMPLOYEE ALREADY CHECKED IN TODAY
-    */
-
-    const startOfDay = new Date();
-
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date();
-
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const existingAttendance =
-      await prisma.attendance.findFirst({
-        where: {
-          employeeId: employee.employeeId,
-          date: {
-            gte: startOfDay,
-            lte: endOfDay,
-          },
-        },
-      });
-
-    if (existingAttendance) {
+    if (matchingEmployees.length > 1) {
       return res.status(409).json({
         success: false,
         message:
-          "Employee has already marked attendance today.",
-        attendance: existingAttendance,
+          "Multiple employees have the same Name and Department. Please use a unique employee record.",
       });
     }
 
-    /*
-    CREATE CHECK-IN
-    */
-
-    const attendance =
-      await prisma.attendance.create({
-        data: {
-          employeeId: employee.employeeId,
-
-          status: status || "Present",
-
-          checkIn: checkIn
-            ? new Date(checkIn)
-            : new Date(),
-
-          checkOut: checkOut
-            ? new Date(checkOut)
-            : null,
-
-          latitude: userLatitude,
-
-          longitude: userLongitude,
-        },
-
-        include: {
-          employee: {
-            select: {
-              id: true,
-              employeeId: true,
-              name: true,
-              email: true,
-              department: true,
-              location: true,
-              photoUrl: true,
-            },
-          },
-        },
-      });
-
-    res.status(201).json({
-      success: true,
-      message:
-        "Attendance marked successfully.",
-      attendance,
-    });
-  } catch (error) {
-    console.error("ATTENDANCE POST ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to mark attendance.",
-      error: error.message,
-    });
-  }
-});
-
-/*
-========================================
-CHECK OUT
-Employee ID + Password
-========================================
-*/
-
-router.put("/checkout/:employeeId", async (req, res) => {
-  try {
-    const { employeeId } = req.params;
-
-    const {
-      password,
-      latitude,
-      longitude,
-    } = req.body;
-
-    /*
-    VALIDATE EMPLOYEE ID
-    */
-
-    if (!employeeId || !employeeId.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Employee ID is required.",
-      });
-    }
-
-    /*
-    VALIDATE PASSWORD
-    */
-
-    if (!password || !password.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Employee Password is required.",
-      });
-    }
-
-    /*
-    FIND EMPLOYEE
-    */
-
-    const employee =
-      await prisma.employee.findUnique({
-        where: {
-          employeeId: employeeId.trim(),
-        },
-      });
-
-    if (!employee) {
-      return res.status(401).json({
-        success: false,
-        message:
-          "Invalid Employee ID or Password.",
-      });
-    }
-
-    /*
-    CHECK PASSWORD CONFIGURATION
-    */
-
-    if (!employee.passwordHash) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Employee password is not configured. Please contact your administrator.",
-      });
-    }
-
-    /*
-    VERIFY PASSWORD
-    */
-
-    const passwordValid =
-      await bcrypt.compare(
-        password,
-        employee.passwordHash
-      );
-
-    if (!passwordValid) {
-      return res.status(401).json({
-        success: false,
-        message:
-          "Invalid Employee ID or Password.",
-      });
-    }
+    const employee = matchingEmployees[0];
 
     /*
     OPTIONAL GPS
@@ -461,8 +453,7 @@ router.put("/checkout/:employeeId", async (req, res) => {
 
     res.json({
       success: true,
-      message:
-        "Check-Out marked successfully.",
+      message: "Check-Out marked successfully.",
       attendance: updatedAttendance,
     });
   } catch (error) {
