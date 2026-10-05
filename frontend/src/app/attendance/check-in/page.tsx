@@ -10,9 +10,6 @@ export default function CheckInPage() {
 
   const [employeeId, setEmployeeId] = useState("");
   const [password, setPassword] = useState("");
-  const [employeeName, setEmployeeName] = useState("");
-  const [department, setDepartment] = useState("");
-  const [email, setEmail] = useState("");
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStream, setCameraStream] =
@@ -90,14 +87,9 @@ export default function CheckInPage() {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
 
-          videoRef.current
-            .play()
-            .catch((err) =>
-              console.error(
-                "Video play error:",
-                err
-              )
-            );
+          videoRef.current.play().catch((err) => {
+            console.error("Video play error:", err);
+          });
         }
       }, 100);
     } catch (err) {
@@ -180,10 +172,10 @@ export default function CheckInPage() {
   };
 
   // --------------------------------
-  // GET LOCATION
+  // GET MY LOCATION
   // --------------------------------
 
-  const getLocation = () => {
+  const getCurrentLocation = () => {
     setError("");
     setMessage("");
 
@@ -195,35 +187,50 @@ export default function CheckInPage() {
     }
 
     setMessage(
-      "Requesting location permission..."
+      "📍 Requesting your current location..."
     );
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setLatitude(
-          position.coords.latitude
-        );
+        const currentLatitude =
+          position.coords.latitude;
 
-        setLongitude(
-          position.coords.longitude
-        );
+        const currentLongitude =
+          position.coords.longitude;
+
+        setLatitude(currentLatitude);
+        setLongitude(currentLongitude);
 
         setMessage(
-          "✓ Location captured successfully."
+          "✓ Location captured successfully. You can now Check In."
         );
       },
-
       (err) => {
         console.error(
           "Location error:",
           err
         );
 
-        setError(
-          "Unable to get location. Please allow location permission."
-        );
-      },
+        if (err.code === 1) {
+          setError(
+            "Location permission was denied. Please allow location access for this website."
+          );
+        } else if (err.code === 2) {
+          setError(
+            "Your location could not be determined. Please turn on GPS/location services."
+          );
+        } else if (err.code === 3) {
+          setError(
+            "Location request timed out. Please try again."
+          );
+        } else {
+          setError(
+            "Unable to get your current location."
+          );
+        }
 
+        setMessage("");
+      },
       {
         enableHighAccuracy: true,
         timeout: 15000,
@@ -233,14 +240,12 @@ export default function CheckInPage() {
   };
 
   // --------------------------------
-  // CHECK REQUIRED FIELDS
+  // CHECK-IN VALIDATION
   // --------------------------------
 
   const validateForm = () => {
     if (!employeeId.trim()) {
-      setError(
-        "Employee ID is required."
-      );
+      setError("Employee ID is required.");
       return false;
     }
 
@@ -258,40 +263,9 @@ export default function CheckInPage() {
       return false;
     }
 
-    if (!employeeName.trim()) {
-      setError(
-        "Employee Name is required."
-      );
-      return false;
-    }
-
-    if (!department.trim()) {
-      setError(
-        "Department is required."
-      );
-      return false;
-    }
-
-    if (!email.trim()) {
-      setError(
-        "Email is required."
-      );
-      return false;
-    }
-
-    const emailPattern =
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!emailPattern.test(email.trim())) {
-      setError(
-        "Please enter a valid email address."
-      );
-      return false;
-    }
-
     if (!photoCaptured) {
       setError(
-        "Employee photo is compulsory."
+        "Employee photo is compulsory. Please capture your photo."
       );
       return false;
     }
@@ -301,7 +275,7 @@ export default function CheckInPage() {
       longitude === null
     ) {
       setError(
-        "Employee location is compulsory."
+        "Please click Get My Location before Check In."
       );
       return false;
     }
@@ -360,12 +334,13 @@ export default function CheckInPage() {
           data.message ||
             "Check-In failed."
         );
+
         setMessage("");
         return;
       }
 
       setMessage(
-        "✓ Attendance marked successfully. Check-In completed."
+        "✓ Attendance saved successfully. Check-In completed."
       );
 
       setPassword("");
@@ -384,6 +359,10 @@ export default function CheckInPage() {
       setLoading(false);
     }
   };
+
+  // --------------------------------
+  // PAGE
+  // --------------------------------
 
   return (
     <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
@@ -468,64 +447,13 @@ export default function CheckInPage() {
           />
 
           <p className="mt-2 text-xs text-slate-500">
-            Password is verified securely by the attendance server.
+            Password is securely verified by the attendance server.
           </p>
-
-          {/* NAME */}
-
-          <label className="mt-4 block text-sm font-semibold">
-            Employee Name *
-          </label>
-
-          <input
-            type="text"
-            value={employeeName}
-            onChange={(e) =>
-              setEmployeeName(e.target.value)
-            }
-            placeholder="Enter Employee Name"
-            required
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-          />
-
-          {/* DEPARTMENT */}
-
-          <label className="mt-4 block text-sm font-semibold">
-            Department *
-          </label>
-
-          <input
-            type="text"
-            value={department}
-            onChange={(e) =>
-              setDepartment(e.target.value)
-            }
-            placeholder="Enter Department"
-            required
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-          />
-
-          {/* EMAIL */}
-
-          <label className="mt-4 block text-sm font-semibold">
-            Email *
-          </label>
-
-          <input
-            type="email"
-            value={email}
-            onChange={(e) =>
-              setEmail(e.target.value)
-            }
-            placeholder="employee@example.com"
-            required
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-          />
 
         </section>
 
         {/* -------------------------------- */}
-        {/* PHOTO */}
+        {/* EMPLOYEE PHOTO */}
         {/* -------------------------------- */}
 
         <section className="mt-8">
@@ -543,7 +471,8 @@ export default function CheckInPage() {
               <button
                 type="button"
                 onClick={openCamera}
-                className="mt-4 w-full rounded-lg bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-700"
+                disabled={loading}
+                className="mt-4 w-full rounded-lg bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
               >
                 📷 Open Camera
               </button>
@@ -600,7 +529,8 @@ export default function CheckInPage() {
               <button
                 type="button"
                 onClick={retakePhoto}
-                className="mt-3 w-full rounded-lg border px-4 py-3"
+                disabled={loading}
+                className="mt-3 w-full rounded-lg border px-4 py-3 disabled:opacity-50"
               >
                 🔄 Retake Photo
               </button>
@@ -611,30 +541,31 @@ export default function CheckInPage() {
         </section>
 
         {/* -------------------------------- */}
-        {/* LOCATION */}
+        {/* MOBILE LOCATION */}
         {/* -------------------------------- */}
 
         <section className="mt-8">
 
           <h2 className="text-lg font-semibold text-slate-900">
-            3. Employee Location *
+            3. Mobile Location *
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Location is compulsory for attendance.
+            Click Get My Location to capture your current mobile location.
           </p>
 
           <button
             type="button"
-            onClick={getLocation}
-            className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700"
+            onClick={getCurrentLocation}
+            disabled={loading}
+            className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             📍 Get My Location
           </button>
 
           {latitude !== null &&
             longitude !== null && (
-              <div className="mt-4 rounded-lg bg-slate-50 p-4 text-sm">
+              <div className="mt-4 rounded-lg bg-green-50 p-4 text-sm">
 
                 <p>
                   Latitude: {latitude}
@@ -654,7 +585,7 @@ export default function CheckInPage() {
         </section>
 
         {/* -------------------------------- */}
-        {/* CHECK-IN */}
+        {/* CHECK IN */}
         {/* -------------------------------- */}
 
         <section className="mt-8">
@@ -666,14 +597,14 @@ export default function CheckInPage() {
             className="w-full rounded-lg bg-green-600 px-4 py-4 text-lg font-bold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
-              ? "Verifying & Checking In..."
+              ? "Saving Attendance..."
               : "✓ CHECK IN"}
           </button>
 
         </section>
 
         {/* -------------------------------- */}
-        {/* CHECKLIST */}
+        {/* CHECK-IN REQUIREMENTS */}
         {/* -------------------------------- */}
 
         <div className="mt-6 rounded-xl bg-slate-50 p-4">
@@ -697,24 +628,6 @@ export default function CheckInPage() {
             </li>
 
             <li>
-              {employeeName.trim()
-                ? "✓"
-                : "○"} Employee Name
-            </li>
-
-            <li>
-              {department.trim()
-                ? "✓"
-                : "○"} Department
-            </li>
-
-            <li>
-              {email.trim()
-                ? "✓"
-                : "○"} Email
-            </li>
-
-            <li>
               {photoCaptured
                 ? "✓"
                 : "○"} Employee Photo
@@ -724,10 +637,31 @@ export default function CheckInPage() {
               {latitude !== null &&
               longitude !== null
                 ? "✓"
-                : "○"} Employee Location
+                : "○"} Mobile Location
             </li>
 
           </ul>
+
+        </div>
+
+        {/* -------------------------------- */}
+        {/* LOCATION NOTE */}
+        {/* -------------------------------- */}
+
+        <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800">
+
+          <p className="font-semibold">
+            📍 Location Information
+          </p>
+
+          <p className="mt-2">
+            Click Get My Location before Check In.
+            Your latitude and longitude will be saved with the attendance record.
+          </p>
+
+          <p className="mt-2">
+            No distance or radius restriction is applied.
+          </p>
 
         </div>
 

@@ -7,17 +7,11 @@ const cloudinary = require("../utils/cloudinary");
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// ======================================================
-// MULTER CONFIGURATION
-// ======================================================
-
 const upload = multer({
   storage: multer.memoryStorage(),
-
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5 MB maximum
+    fileSize: 5 * 1024 * 1024,
   },
-
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
       "image/jpeg",
@@ -36,10 +30,6 @@ const upload = multer({
     cb(null, true);
   },
 });
-
-// ======================================================
-// CLOUDINARY UPLOAD HELPER
-// ======================================================
 
 function uploadToCloudinary(fileBuffer) {
   return new Promise((resolve, reject) => {
@@ -61,23 +51,22 @@ function uploadToCloudinary(fileBuffer) {
   });
 }
 
-// ======================================================
-// GET ALL EMPLOYEES
-// ======================================================
-
+/*
+  GET ALL EMPLOYEES
+*/
 router.get("/", async (req, res) => {
   try {
     const employees = await prisma.employee.findMany({
       orderBy: {
         id: "desc",
       },
-
       select: {
         id: true,
         employeeId: true,
         name: true,
         email: true,
         department: true,
+        location: true,
         photoUrl: true,
         createdAt: true,
         updatedAt: true,
@@ -99,10 +88,9 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ======================================================
-// GET EMPLOYEE BY DATABASE ID
-// ======================================================
-
+/*
+  GET EMPLOYEE BY DATABASE ID
+*/
 router.get("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -118,13 +106,13 @@ router.get("/:id", async (req, res) => {
       where: {
         id,
       },
-
       select: {
         id: true,
         employeeId: true,
         name: true,
         email: true,
         department: true,
+        location: true,
         photoUrl: true,
         createdAt: true,
         updatedAt: true,
@@ -153,10 +141,9 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// ======================================================
-// POST - REGISTER NEW EMPLOYEE
-// ======================================================
-
+/*
+  REGISTER NEW EMPLOYEE
+*/
 router.post("/", upload.single("photo"), async (req, res) => {
   try {
     const {
@@ -164,13 +151,14 @@ router.post("/", upload.single("photo"), async (req, res) => {
       name,
       email,
       department,
+      location,
       password,
       confirmPassword,
     } = req.body;
 
-    // --------------------------------------------------
-    // 1. Validate required employee fields
-    // --------------------------------------------------
+    /*
+      REQUIRED FIELD VALIDATION
+    */
 
     if (!employeeId || !employeeId.trim()) {
       return res.status(400).json({
@@ -200,9 +188,12 @@ router.post("/", upload.single("photo"), async (req, res) => {
       });
     }
 
-    // --------------------------------------------------
-    // 2. Validate employee photo
-    // --------------------------------------------------
+    if (!location || !location.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee Location is required.",
+      });
+    }
 
     if (!req.file) {
       return res.status(400).json({
@@ -210,10 +201,6 @@ router.post("/", upload.single("photo"), async (req, res) => {
         message: "Employee Photo is required.",
       });
     }
-
-    // --------------------------------------------------
-    // 3. Password validation
-    // --------------------------------------------------
 
     if (!password || !password.trim()) {
       return res.status(400).json({
@@ -248,9 +235,9 @@ router.post("/", upload.single("photo"), async (req, res) => {
       });
     }
 
-    // --------------------------------------------------
-    // 4. Check duplicate employee ID or email
-    // --------------------------------------------------
+    /*
+      CHECK DUPLICATE EMPLOYEE
+    */
 
     const existingEmployee = await prisma.employee.findFirst({
       where: {
@@ -272,15 +259,15 @@ router.post("/", upload.single("photo"), async (req, res) => {
       });
     }
 
-    // --------------------------------------------------
-    // 5. Hash password
-    // --------------------------------------------------
+    /*
+      HASH PASSWORD
+    */
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // --------------------------------------------------
-    // 6. Upload employee photo to Cloudinary
-    // --------------------------------------------------
+    /*
+      UPLOAD EMPLOYEE PHOTO TO CLOUDINARY
+    */
 
     let cloudinaryResult;
 
@@ -301,9 +288,9 @@ router.post("/", upload.single("photo"), async (req, res) => {
       });
     }
 
-    // --------------------------------------------------
-    // 7. Create employee in PostgreSQL
-    // --------------------------------------------------
+    /*
+      CREATE EMPLOYEE
+    */
 
     const employee = await prisma.employee.create({
       data: {
@@ -311,30 +298,31 @@ router.post("/", upload.single("photo"), async (req, res) => {
         name: name.trim(),
         email: email.trim(),
         department: department.trim(),
+        location: location.trim(),
         passwordHash,
         photoUrl: cloudinaryResult.secure_url,
       },
-
       select: {
         id: true,
         employeeId: true,
         name: true,
         email: true,
         department: true,
+        location: true,
         photoUrl: true,
         createdAt: true,
         updatedAt: true,
       },
     });
 
-    // --------------------------------------------------
-    // 8. Success response
-    // --------------------------------------------------
+    /*
+      SUCCESS RESPONSE
+    */
 
     res.status(201).json({
       success: true,
       message:
-        "Employee registered successfully with photo.",
+        "Employee registered successfully with photo and location.",
       employee,
     });
   } catch (error) {
@@ -348,10 +336,9 @@ router.post("/", upload.single("photo"), async (req, res) => {
   }
 });
 
-// ======================================================
-// MULTER / UPLOAD ERROR HANDLER
-// ======================================================
-
+/*
+  MULTER / UPLOAD ERROR HANDLER
+*/
 router.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === "LIMIT_FILE_SIZE") {
@@ -377,9 +364,5 @@ router.use((error, req, res, next) => {
 
   next();
 });
-
-// ======================================================
-// EXPORT ROUTER
-// ======================================================
 
 module.exports = router;

@@ -15,6 +15,7 @@ model Employee {
   department          String
   passwordHash        String?
   photoUrl            String?
+  location            String?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   attendance          Attendance[]
@@ -28,8 +29,11 @@ model Attendance {
   checkIn   DateTime?
   checkOut  DateTime?
   status     String    @default("Present")
-  createdAt  DateTime  @default(now())
-  employee   Employee  @relation(fields: [employeeId], references: [employeeId])
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime  @default(now())
+
+  employee  Employee  @relation(fields: [employeeId], references: [employeeId])
 
   @@index([employeeId])
   @@index([date])

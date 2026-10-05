@@ -1,46 +1,117 @@
 "use client";
 
-import { QRCodeCanvas } from "qrcode.react";
-
-const ATTENDANCE_URL =
-  "https://attendance-system-omega-beryl-95.vercel.app/attendance/check-in";
+import Link from "next/link";
 
 export default function QRPage() {
   return (
-    <main className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl text-center">
-
-        <h1 className="text-3xl font-bold text-slate-900">
-          TALENTRONAUT PVT LTD
+    <main
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px",
+        background: "#f5f7fb",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "520px",
+          background: "#ffffff",
+          padding: "40px 30px",
+          borderRadius: "16px",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+          textAlign: "center",
+        }}
+      >
+        <h1
+          style={{
+            margin: 0,
+            fontSize: "32px",
+            fontWeight: 700,
+            color: "#111827",
+          }}
+        >
+          Smart Attendance
         </h1>
 
-        <h2 className="mt-2 text-xl font-semibold text-slate-700">
-          Employee Attendance
-        </h2>
-
-        <p className="mt-3 text-slate-600">
-          Scan this QR code using your mobile phone to open
-          the Employee Attendance page.
+        <p
+          style={{
+            marginTop: "12px",
+            marginBottom: "32px",
+            color: "#6b7280",
+            fontSize: "16px",
+          }}
+        >
+          Please select an option
         </p>
 
-        <div className="mt-8 flex justify-center">
-          <div className="rounded-2xl border bg-white p-5">
-            <QRCodeCanvas
-              value={ATTENDANCE_URL}
-              size={280}
-              level="H"
-            />
-          </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+          }}
+        >
+          <Link
+            href="/attendance/check-in"
+            style={{
+              display: "block",
+              padding: "16px 20px",
+              borderRadius: "10px",
+              background: "#2563eb",
+              color: "#ffffff",
+              textDecoration: "none",
+              fontSize: "18px",
+              fontWeight: 600,
+            }}
+          >
+            1. Check In
+          </Link>
+
+          <Link
+            href="/attendance"
+            style={{
+              display: "block",
+              padding: "16px 20px",
+              borderRadius: "10px",
+              background: "#16a34a",
+              color: "#ffffff",
+              textDecoration: "none",
+              fontSize: "18px",
+              fontWeight: 600,
+            }}
+          >
+            2. Check Out
+          </Link>
+
+          <Link
+            href="/employees"
+            style={{
+              display: "block",
+              padding: "16px 20px",
+              borderRadius: "10px",
+              background: "#7c3aed",
+              color: "#ffffff",
+              textDecoration: "none",
+              fontSize: "18px",
+              fontWeight: 600,
+            }}
+          >
+            3. Register a New Employee
+          </Link>
         </div>
 
-        <p className="mt-6 text-sm font-semibold text-slate-700">
-          Scan to Start Attendance
+        <p
+          style={{
+            marginTop: "28px",
+            fontSize: "13px",
+            color: "#9ca3af",
+          }}
+        >
+          Smart Attendance System
         </p>
-
-        <p className="mt-3 break-all text-xs text-slate-500">
-          {ATTENDANCE_URL}
-        </p>
-
       </div>
     </main>
   );
