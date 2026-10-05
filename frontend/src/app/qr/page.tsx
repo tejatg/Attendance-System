@@ -2,6 +2,14 @@
 
 import Link from "next/link";
 
+const ATTENDANCE_URL =
+  "https://attendance-system-omega-beryl-95.vercel.app/attendance/check-in";
+
+const QR_IMAGE_URL =
+  `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
+    ATTENDANCE_URL
+  )}`;
+
 export default function QRPage() {
   return (
     <main
@@ -19,7 +27,7 @@ export default function QRPage() {
           width: "100%",
           maxWidth: "520px",
           background: "#ffffff",
-          padding: "40px 30px",
+          padding: "32px 28px",
           borderRadius: "16px",
           boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
           textAlign: "center",
@@ -38,69 +46,139 @@ export default function QRPage() {
 
         <p
           style={{
-            marginTop: "12px",
-            marginBottom: "32px",
+            marginTop: "10px",
             color: "#6b7280",
             fontSize: "16px",
           }}
         >
-          Please select an option
+          Scan QR Code to access Attendance
         </p>
 
+        {/* QR CODE */}
         <div
           style={{
+            marginTop: "24px",
             display: "flex",
-            flexDirection: "column",
-            gap: "16px",
+            justifyContent: "center",
           }}
         >
-          <Link
-            href="/attendance/check-in"
+          <div
             style={{
-              display: "block",
-              padding: "16px 20px",
-              borderRadius: "10px",
-              background: "#2563eb",
-              color: "#ffffff",
-              textDecoration: "none",
-              fontSize: "18px",
-              fontWeight: 600,
+              padding: "14px",
+              background: "#ffffff",
+              border: "1px solid #e5e7eb",
+              borderRadius: "12px",
             }}
           >
-            1. Check In
-          </Link>
+            <img
+              src={QR_IMAGE_URL}
+              alt="Smart Attendance QR Code"
+              width={300}
+              height={300}
+              style={{
+                display: "block",
+                width: "300px",
+                height: "300px",
+              }}
+            />
+          </div>
+        </div>
 
-          <Link
-            href="/attendance"
-            style={{
-              display: "block",
-              padding: "16px 20px",
-              borderRadius: "10px",
-              background: "#16a34a",
-              color: "#ffffff",
-              textDecoration: "none",
-              fontSize: "18px",
-              fontWeight: 600,
-            }}
-          >
-            2. Check Out
-          </Link>
+        <p
+          style={{
+            marginTop: "14px",
+            fontSize: "14px",
+            color: "#6b7280",
+          }}
+        >
+          Scan this QR code to open Employee Check-In
+        </p>
 
-          <Link
-            href="/employees"
+        {/* ATTENDANCE OPTIONS */}
+        <div
+          style={{
+            marginTop: "30px",
+            borderTop: "1px solid #e5e7eb",
+            paddingTop: "26px",
+          }}
+        >
+          <h2
             style={{
-              display: "block",
-              padding: "16px 20px",
-              borderRadius: "10px",
-              background: "#7c3aed",
-              color: "#ffffff",
-              textDecoration: "none",
-              fontSize: "18px",
-              fontWeight: 600,
+              margin: 0,
+              fontSize: "22px",
+              fontWeight: 700,
+              color: "#111827",
             }}
           >
-            3. Register a New Employee
-          </Link>
+            Smart Attendance
+          </h2>
+
+          <p
+            style={{
+              marginTop: "8px",
+              marginBottom: "22px",
+              color: "#6b7280",
+              fontSize: "15px",
+            }}
+          >
+            Please select an option
+          </p>
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+            }}
+          >
+            <Link
+              href="/attendance/check-in"
+              style={{
+                display: "block",
+                padding: "16px 20px",
+                borderRadius: "10px",
+                background: "#2563eb",
+                color: "#ffffff",
+                textDecoration: "none",
+                fontSize: "18px",
+                fontWeight: 600,
+              }}
+            >
+              Check In
+            </Link>
+
+            <Link
+              href="/attendance"
+              style={{
+                display: "block",
+                padding: "16px 20px",
+                borderRadius: "10px",
+                background: "#16a34a",
+                color: "#ffffff",
+                textDecoration: "none",
+                fontSize: "18px",
+                fontWeight: 600,
+              }}
+            >
+              Check Out
+            </Link>
+
+            <Link
+              href="/employees"
+              style={{
+                display: "block",
+                padding: "16px 20px",
+                borderRadius: "10px",
+                background: "#7c3aed",
+                color: "#ffffff",
+                textDecoration: "none",
+                fontSize: "18px",
+                fontWeight: 600,
+              }}
+            >
+              Register a New Employee
+            </Link>
+          </div>
         </div>
 
         <p
