@@ -8,6 +8,8 @@ export default function AttendanceOptionsPage() {
   return (
     <main className="min-h-screen bg-white px-6 py-10">
       <div className="mx-auto flex min-h-[80vh] w-full max-w-md flex-col justify-center">
+
+        {/* Header */}
         <div className="mb-10 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">
             Attendance Options
@@ -18,7 +20,10 @@ export default function AttendanceOptionsPage() {
           </p>
         </div>
 
+        {/* Options */}
         <div className="space-y-4">
+
+          {/* Check In */}
           <button
             type="button"
             onClick={() => router.push("/attendance/check-in")}
@@ -27,6 +32,7 @@ export default function AttendanceOptionsPage() {
             CHECK IN
           </button>
 
+          {/* Check Out */}
           <button
             type="button"
             onClick={() => router.push("/attendance")}
@@ -35,6 +41,7 @@ export default function AttendanceOptionsPage() {
             CHECK OUT
           </button>
 
+          {/* Register New Employee */}
           <button
             type="button"
             onClick={() => router.push("/employees")}
@@ -43,13 +50,15 @@ export default function AttendanceOptionsPage() {
             REGISTER NEW EMPLOYEE
           </button>
 
+          {/* Admin Dashboard */}
           <button
             type="button"
-            onClick={() => router.push("/admin")}
+            onClick={() => router.push("/admin-login")}
             className="w-full rounded-xl bg-black px-6 py-4 text-lg font-bold text-white transition hover:opacity-90"
           >
             ADMIN DASHBOARD
           </button>
+
         </div>
       </div>
     </main>
