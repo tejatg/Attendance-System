@@ -1,128 +1,56 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function AttendanceOptionsPage() {
+  const router = useRouter();
+
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px",
-        background: "#f5f7fb",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "520px",
-          background: "#ffffff",
-          padding: "32px 28px",
-          borderRadius: "16px",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-          textAlign: "center",
-        }}
-      >
-        <h1
-          style={{
-            margin: 0,
-            fontSize: "30px",
-            fontWeight: 700,
-            color: "#111827",
-          }}
-        >
-          TALENTRONAUT PVT LTD
-        </h1>
+    <main className="min-h-screen bg-white px-6 py-10">
+      <div className="mx-auto flex min-h-[80vh] w-full max-w-md flex-col justify-center">
+        <div className="mb-10 text-center">
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+            Attendance Options
+          </h1>
 
-        <p
-          style={{
-            marginTop: "10px",
-            color: "#6b7280",
-            fontSize: "16px",
-          }}
-        >
-          Employee Attendance
-        </p>
-
-        <h2
-          style={{
-            marginTop: "32px",
-            fontSize: "24px",
-            fontWeight: 700,
-            color: "#111827",
-          }}
-        >
-          Select an Option
-        </h2>
-
-        <div
-          style={{
-            marginTop: "24px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-          }}
-        >
-          <Link
-            href="/attendance/check-in"
-            style={{
-              display: "block",
-              padding: "17px 20px",
-              borderRadius: "10px",
-              background: "#2563eb",
-              color: "#ffffff",
-              textDecoration: "none",
-              fontSize: "19px",
-              fontWeight: 700,
-            }}
-          >
-            CHECK IN
-          </Link>
-
-          <Link
-            href="/attendance"
-            style={{
-              display: "block",
-              padding: "17px 20px",
-              borderRadius: "10px",
-              background: "#16a34a",
-              color: "#ffffff",
-              textDecoration: "none",
-              fontSize: "19px",
-              fontWeight: 700,
-            }}
-          >
-            CHECK OUT
-          </Link>
-
-          <Link
-            href="/employees"
-            style={{
-              display: "block",
-              padding: "17px 20px",
-              borderRadius: "10px",
-              background: "#7c3aed",
-              color: "#ffffff",
-              textDecoration: "none",
-              fontSize: "19px",
-              fontWeight: 700,
-            }}
-          >
-            REGISTER NEW EMPLOYEE
-          </Link>
+          <p className="mt-3 text-sm text-gray-500">
+            Select an option to continue
+          </p>
         </div>
 
-        <p
-          style={{
-            marginTop: "28px",
-            fontSize: "13px",
-            color: "#9ca3af",
-          }}
-        >
-          TALENTRONAUT PVT LTD
-        </p>
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => router.push("/attendance/check-in")}
+            className="w-full rounded-xl bg-black px-6 py-4 text-lg font-bold text-white transition hover:opacity-90"
+          >
+            CHECK IN
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push("/attendance")}
+            className="w-full rounded-xl bg-black px-6 py-4 text-lg font-bold text-white transition hover:opacity-90"
+          >
+            CHECK OUT
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push("/employees")}
+            className="w-full rounded-xl border-2 border-black bg-white px-6 py-4 text-lg font-bold text-black transition hover:bg-gray-100"
+          >
+            REGISTER NEW EMPLOYEE
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push("/admin")}
+            className="w-full rounded-xl bg-black px-6 py-4 text-lg font-bold text-white transition hover:opacity-90"
+          >
+            ADMIN DASHBOARD
+          </button>
+        </div>
       </div>
     </main>
   );
