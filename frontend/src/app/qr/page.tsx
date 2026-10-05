@@ -1,11 +1,11 @@
 "use client";
 
-const ATTENDANCE_URL =
-  "https://attendance-system-omega-beryl-95.vercel.app/attendance/check-in";
+const ATTENDANCE_OPTIONS_URL =
+  "https://attendance-system-omega-beryl-95.vercel.app/attendance/options";
 
 const QR_IMAGE_URL =
   `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
-    ATTENDANCE_URL
+    ATTENDANCE_OPTIONS_URL
   )}`;
 
 export default function QRPage() {
@@ -52,8 +52,6 @@ export default function QRPage() {
           Employee Attendance
         </p>
 
-        {/* QR CODE ONLY */}
-
         <div
           style={{
             marginTop: "28px",
@@ -90,7 +88,7 @@ export default function QRPage() {
             color: "#6b7280",
           }}
         >
-          Scan this QR code to access Employee Check-In
+          Scan this QR code to continue
         </p>
 
         <p
