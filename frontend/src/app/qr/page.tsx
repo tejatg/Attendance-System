@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 const ATTENDANCE_URL =
   "https://attendance-system-omega-beryl-95.vercel.app/attendance/check-in";
 
@@ -33,8 +31,6 @@ export default function QRPage() {
           textAlign: "center",
         }}
       >
-        {/* TITLE */}
-
         <h1
           style={{
             margin: 0,
@@ -56,11 +52,11 @@ export default function QRPage() {
           Scan QR Code to access Attendance
         </p>
 
-        {/* QR CODE FIRST */}
+        {/* QR CODE ONLY */}
 
         <div
           style={{
-            marginTop: "24px",
+            marginTop: "28px",
             display: "flex",
             justifyContent: "center",
           }}
@@ -89,91 +85,13 @@ export default function QRPage() {
 
         <p
           style={{
-            marginTop: "14px",
+            marginTop: "16px",
             fontSize: "14px",
             color: "#6b7280",
           }}
         >
           Scan this QR code to open Employee Check-In
         </p>
-
-        {/* CHECK IN / CHECK OUT AFTER QR */}
-
-        <div
-          style={{
-            marginTop: "30px",
-            borderTop: "1px solid #e5e7eb",
-            paddingTop: "26px",
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              fontSize: "22px",
-              fontWeight: 700,
-              color: "#111827",
-            }}
-          >
-            Attendance
-          </h2>
-
-          <p
-            style={{
-              marginTop: "8px",
-              marginBottom: "22px",
-              color: "#6b7280",
-              fontSize: "15px",
-            }}
-          >
-            Select an attendance option
-          </p>
-
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "14px",
-            }}
-          >
-            {/* CHECK IN */}
-
-            <Link
-              href="/attendance/check-in"
-              style={{
-                display: "block",
-                padding: "16px 20px",
-                borderRadius: "10px",
-                background: "#2563eb",
-                color: "#ffffff",
-                textDecoration: "none",
-                fontSize: "18px",
-                fontWeight: 600,
-              }}
-            >
-              Check In
-            </Link>
-
-            {/* CHECK OUT */}
-
-            <Link
-              href="/attendance"
-              style={{
-                display: "block",
-                padding: "16px 20px",
-                borderRadius: "10px",
-                background: "#16a34a",
-                color: "#ffffff",
-                textDecoration: "none",
-                fontSize: "18px",
-                fontWeight: 600,
-              }}
-            >
-              Check Out
-            </Link>
-          </div>
-        </div>
-
-        {/* FOOTER */}
 
         <p
           style={{
