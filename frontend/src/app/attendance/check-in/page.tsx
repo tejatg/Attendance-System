@@ -25,6 +25,7 @@ export default function CheckInPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkInCompleted, setCheckInCompleted] = useState(false);
 
   const stopCamera = () => {
     if (cameraStream) {
@@ -44,6 +45,10 @@ export default function CheckInPage() {
   }, [cameraStream]);
 
   const openCamera = async () => {
+    if (checkInCompleted) {
+      return;
+    }
+
     setError("");
     setMessage("");
 
@@ -84,6 +89,10 @@ export default function CheckInPage() {
   };
 
   const capturePhoto = () => {
+    if (checkInCompleted) {
+      return;
+    }
+
     setError("");
     setMessage("");
 
@@ -129,6 +138,10 @@ export default function CheckInPage() {
   };
 
   const retakePhoto = () => {
+    if (checkInCompleted) {
+      return;
+    }
+
     setPhotoPreview("");
     setPhotoCaptured(false);
     setError("");
@@ -138,6 +151,10 @@ export default function CheckInPage() {
   };
 
   const getCurrentLocation = () => {
+    if (checkInCompleted) {
+      return;
+    }
+
     setError("");
     setMessage("");
 
@@ -146,7 +163,7 @@ export default function CheckInPage() {
       return;
     }
 
-    setMessage("📍 Requesting your current location...");
+    setMessage("Requesting your current location...");
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -187,6 +204,11 @@ export default function CheckInPage() {
   };
 
   const validateForm = () => {
+    if (checkInCompleted) {
+      setError("Check-In has already been completed.");
+      return false;
+    }
+
     if (!name.trim()) {
       setError("Employee Name is required.");
       return false;
@@ -220,6 +242,10 @@ export default function CheckInPage() {
   };
 
   const markCheckIn = async () => {
+    if (checkInCompleted) {
+      return;
+    }
+
     setError("");
     setMessage("");
 
@@ -235,7 +261,7 @@ export default function CheckInPage() {
       );
 
       const response = await fetch(
-        `${API_URL}/api/attendance`,
+        API_URL + "/api/attendance",
         {
           method: "POST",
           headers: {
@@ -244,9 +270,9 @@ export default function CheckInPage() {
           body: JSON.stringify({
             name: name.trim(),
             department: department.trim(),
-            password,
-            latitude,
-            longitude,
+            password: password,
+            latitude: latitude,
+            longitude: longitude,
           }),
         }
       );
@@ -254,18 +280,20 @@ export default function CheckInPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(
-          data.message || "Check-In failed."
-        );
+        setError(data.message || "Check-In failed.");
         setMessage("");
         return;
       }
+
+      setCheckInCompleted(true);
 
       setMessage(
         "✓ Attendance saved successfully. Check-In completed."
       );
 
       setPassword("");
+
+      stopCamera();
     } catch (err) {
       console.error("Check-In error:", err);
 
@@ -305,8 +333,6 @@ export default function CheckInPage() {
           </div>
         )}
 
-        {/* EMPLOYEE INFORMATION */}
-
         <section className="mt-6">
           <h2 className="text-lg font-semibold text-slate-900">
             1. Employee Information
@@ -322,8 +348,9 @@ export default function CheckInPage() {
             onChange={(e) => setName(e.target.value)}
             placeholder="Enter Employee Name"
             required
+            disabled={checkInCompleted}
             autoComplete="name"
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
           />
 
           <label className="mt-4 block text-sm font-semibold">
@@ -336,7 +363,8 @@ export default function CheckInPage() {
             onChange={(e) => setDepartment(e.target.value)}
             placeholder="Enter Employee Department"
             required
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={checkInCompleted}
+            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
           />
 
           <label className="mt-4 block text-sm font-semibold">
@@ -350,16 +378,15 @@ export default function CheckInPage() {
             placeholder="Enter Employee Password"
             required
             minLength={6}
+            disabled={checkInCompleted}
             autoComplete="current-password"
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
           />
 
           <p className="mt-2 text-xs text-slate-500">
             Password is securely verified by the attendance server.
           </p>
         </section>
-
-        {/* EMPLOYEE PHOTO */}
 
         <section className="mt-8">
           <h2 className="text-lg font-semibold text-slate-900">
@@ -374,10 +401,10 @@ export default function CheckInPage() {
             <button
               type="button"
               onClick={openCamera}
-              disabled={loading}
+              disabled={loading || checkInCompleted}
               className="mt-4 w-full rounded-lg bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
             >
-              📷 Open Camera
+              Open Camera
             </button>
           )}
 
@@ -394,15 +421,17 @@ export default function CheckInPage() {
               <button
                 type="button"
                 onClick={capturePhoto}
-                className="mt-4 w-full rounded-lg bg-green-600 px-4 py-3 font-semibold text-white"
+                disabled={checkInCompleted}
+                className="mt-4 w-full rounded-lg bg-green-600 px-4 py-3 font-semibold text-white disabled:opacity-50"
               >
-                📸 Capture Photo
+                Capture Photo
               </button>
 
               <button
                 type="button"
                 onClick={stopCamera}
-                className="mt-3 w-full rounded-lg border px-4 py-3"
+                disabled={checkInCompleted}
+                className="mt-3 w-full rounded-lg border px-4 py-3 disabled:opacity-50"
               >
                 Cancel Camera
               </button>
@@ -426,16 +455,14 @@ export default function CheckInPage() {
               <button
                 type="button"
                 onClick={retakePhoto}
-                disabled={loading}
+                disabled={loading || checkInCompleted}
                 className="mt-3 w-full rounded-lg border px-4 py-3 disabled:opacity-50"
               >
-                🔄 Retake Photo
+                Retake Photo
               </button>
             </div>
           )}
         </section>
-
-        {/* MOBILE LOCATION */}
 
         <section className="mt-8">
           <h2 className="text-lg font-semibold text-slate-900">
@@ -449,10 +476,10 @@ export default function CheckInPage() {
           <button
             type="button"
             onClick={getCurrentLocation}
-            disabled={loading}
+            disabled={loading || checkInCompleted}
             className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            📍 Get My Location
+            Get My Location
           </button>
 
           {latitude !== null && longitude !== null && (
@@ -473,18 +500,37 @@ export default function CheckInPage() {
           )}
         </section>
 
-        {/* CHECK IN */}
-
         <section className="mt-8">
           <button
             type="button"
             onClick={markCheckIn}
-            disabled={loading}
-            className="w-full rounded-lg bg-blue-600 px-4 py-4 text-lg font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={loading || checkInCompleted}
+            className={
+              "w-full rounded-lg px-4 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-60 " +
+              (checkInCompleted
+                ? "bg-green-700"
+                : "bg-blue-600 hover:bg-blue-700")
+            }
           >
-            {loading ? "Saving Attendance..." : "CHECK IN"}
+            {checkInCompleted
+              ? "✓ CHECKED IN"
+              : loading
+              ? "Saving Attendance..."
+              : "CHECK IN"}
           </button>
         </section>
+
+        {checkInCompleted && (
+          <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4 text-center">
+            <p className="font-semibold text-green-700">
+              ✓ Check-In completed successfully
+            </p>
+
+            <p className="mt-2 text-sm text-green-700">
+              You cannot Check In again today.
+            </p>
+          </div>
+        )}
 
         <div className="mt-6 rounded-xl bg-slate-50 p-4">
           <p className="font-semibold text-slate-900">
@@ -501,7 +547,10 @@ export default function CheckInPage() {
             </li>
 
             <li>
-              {password.trim() ? "✓" : "○"} Employee Password
+              {password.trim() || checkInCompleted
+                ? "✓"
+                : "○"}{" "}
+              Employee Password
             </li>
 
             <li>
@@ -516,3 +565,4 @@ export default function CheckInPage() {
     </main>
   );
 }
+
