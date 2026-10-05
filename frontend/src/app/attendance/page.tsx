@@ -1,168 +1,103 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
 
-export default function AttendancePage() {
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+const API_URL = "https://attendance-backend-2nky.onrender.com";
 
-  const photoVideoRef = useRef<HTMLVideoElement | null>(null);
-  const photoStreamRef = useRef<MediaStream | null>(null);
+export default function CheckOutPage() {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const [step, setStep] = useState("qr");
+  const [employeeId, setEmployeeId] = useState("");
+  const [password, setPassword] = useState("");
 
-  const [qrResult, setQrResult] = useState("");
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraStream, setCameraStream] =
+    useState<MediaStream | null>(null);
 
+  const [photoCaptured, setPhotoCaptured] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState("");
+
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [scannerStarted, setScannerStarted] = useState(false);
-
-  const [photoCameraStarted, setPhotoCameraStarted] = useState(false);
-
-  const [photoTaken, setPhotoTaken] = useState(false);
-
-  const [photoData, setPhotoData] = useState("");
-
-  // =========================================================
-  // QR SCANNER
-  // =========================================================
-
-  const stopScanner = async () => {
-    if (scannerRef.current) {
-      try {
-        await scannerRef.current.stop();
-        await scannerRef.current.clear();
-      } catch (err) {
-        console.log("QR scanner already stopped.");
-      }
-
-      scannerRef.current = null;
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
     }
 
-    setScannerStarted(false);
+    setCameraStream(null);
+    setCameraOpen(false);
   };
 
-  const startScanner = async () => {
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [cameraStream]);
+
+  const openCamera = async () => {
     setError("");
+    setMessage("");
 
     try {
-      if (scannerRef.current) {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError("Camera is not supported by this browser.");
         return;
       }
 
-      const scanner = new Html5Qrcode("attendance-qr-reader");
-
-      scannerRef.current = scanner;
-
-      await scanner.start(
-        { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: {
-            width: 250,
-            height: 250,
-          },
-          aspectRatio: 1,
-        },
-        async (decodedText) => {
-          console.log("QR CODE:", decodedText);
-
-          setQrResult(decodedText);
-
-          await stopScanner();
-
-          setStep("verification");
-        },
-        () => {
-          // Ignore normal QR scan failures.
-        }
-      );
-
-      setScannerStarted(true);
-    } catch (err) {
-      console.error("QR CAMERA ERROR:", err);
-
-      setError(
-        "Unable to open QR camera. Please allow camera permission."
-      );
-
-      scannerRef.current = null;
-      setScannerStarted(false);
-    }
-  };
-
-  // =========================================================
-  // PHOTO CAMERA
-  // =========================================================
-
-  const startPhotoCamera = async () => {
-    setError("");
-
-    try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "user",
-          width: {
-            ideal: 1280,
-          },
-          height: {
-            ideal: 720,
-          },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
         audio: false,
       });
 
-      photoStreamRef.current = stream;
+      setCameraStream(stream);
+      setCameraOpen(true);
 
-      if (photoVideoRef.current) {
-        photoVideoRef.current.srcObject = stream;
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
 
-        await photoVideoRef.current.play();
-      }
-
-      setPhotoCameraStarted(true);
-      setPhotoTaken(false);
+          videoRef.current.play().catch((err) => {
+            console.error("Video play error:", err);
+          });
+        }
+      }, 100);
     } catch (err) {
-      console.error("PHOTO CAMERA ERROR:", err);
+      console.error("Camera error:", err);
 
       setError(
-        "Unable to open photo camera. Please allow camera permission."
+        "Unable to open camera. Please allow camera permission."
       );
     }
   };
 
-  // =========================================================
-  // STOP PHOTO CAMERA
-  // =========================================================
+  const capturePhoto = () => {
+    setError("");
+    setMessage("");
 
-  const stopPhotoCamera = () => {
-    if (photoStreamRef.current) {
-      photoStreamRef.current.getTracks().forEach((track) => {
-        track.stop();
-      });
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
 
-      photoStreamRef.current = null;
-    }
-
-    if (photoVideoRef.current) {
-      photoVideoRef.current.srcObject = null;
-    }
-
-    setPhotoCameraStarted(false);
-  };
-
-  // =========================================================
-  // TAKE PHOTO
-  // =========================================================
-
-  const takePhoto = () => {
-    const video = photoVideoRef.current;
-
-    if (!video) {
+    if (!video || !canvas) {
+      setError("Camera is not ready.");
       return;
     }
 
-    const canvas = document.createElement("canvas");
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      setError("Camera is not ready. Please wait a moment.");
+      return;
+    }
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -182,537 +117,396 @@ export default function AttendancePage() {
       canvas.height
     );
 
-    const imageData = canvas.toDataURL(
-      "image/jpeg",
-      0.9
-    );
+    const image = canvas.toDataURL("image/jpeg", 0.9);
 
-    setPhotoData(imageData);
+    setPhotoPreview(image);
+    setPhotoCaptured(true);
 
-    setPhotoTaken(true);
+    stopCamera();
 
-    stopPhotoCamera();
+    setMessage("✓ Employee photo captured successfully.");
   };
-
-  // =========================================================
-  // RETAKE PHOTO
-  // =========================================================
 
   const retakePhoto = () => {
-    setPhotoData("");
-    setPhotoTaken(false);
+    setPhotoPreview("");
+    setPhotoCaptured(false);
+    setError("");
+    setMessage("");
 
-    startPhotoCamera();
+    openCamera();
   };
 
-  // =========================================================
-  // CLEANUP
-  // =========================================================
+  const getCurrentLocation = () => {
+    setError("");
+    setMessage("");
 
-  useEffect(() => {
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current
-          .stop()
-          .catch(() => {})
-          .finally(() => {
-            scannerRef.current = null;
-          });
+    if (!navigator.geolocation) {
+      setError("GPS is not supported by this browser.");
+      return;
+    }
+
+    setMessage("📍 Requesting your current location...");
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLatitude(position.coords.latitude);
+        setLongitude(position.coords.longitude);
+
+        setMessage("✓ Location captured successfully.");
+      },
+      (err) => {
+        console.error("Location error:", err);
+
+        if (err.code === 1) {
+          setError(
+            "Location permission was denied. You can continue Check-Out without location."
+          );
+        } else if (err.code === 2) {
+          setError(
+            "Your location could not be determined. You can continue Check-Out without location."
+          );
+        } else if (err.code === 3) {
+          setError(
+            "Location request timed out. You can continue Check-Out without location."
+          );
+        } else {
+          setError(
+            "Unable to get your current location. You can continue Check-Out without location."
+          );
+        }
+
+        setMessage("");
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
+    );
+  };
+
+  const validateForm = () => {
+    if (!employeeId.trim()) {
+      setError("Employee ID is required.");
+      return false;
+    }
+
+    if (!password.trim()) {
+      setError("Employee Password is required.");
+      return false;
+    }
+
+    if (password.length < 6) {
+      setError(
+        "Employee Password must be at least 6 characters."
+      );
+      return false;
+    }
+
+    if (!photoCaptured) {
+      setError(
+        "Employee photo is compulsory. Please capture your photo."
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  const markCheckOut = async () => {
+    setError("");
+    setMessage("");
+
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      setMessage(
+        "Verifying Employee ID and Password..."
+      );
+
+      const response = await fetch(
+        `${API_URL}/api/attendance/checkout/${encodeURIComponent(
+          employeeId.trim()
+        )}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            password,
+            latitude,
+            longitude,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Check-Out failed.");
+        setMessage("");
+        return;
       }
 
-      if (photoStreamRef.current) {
-        photoStreamRef.current
-          .getTracks()
-          .forEach((track) => track.stop());
-      }
-    };
-  }, []);
+      setMessage(
+        "✓ Attendance saved successfully. Check-Out completed."
+      );
 
-  // =========================================================
-  // UI
-  // =========================================================
+      setPassword("");
+    } catch (err) {
+      console.error("Check-Out error:", err);
+
+      setMessage("");
+
+      setError(
+        "Unable to connect to the attendance server."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <main className="min-h-screen bg-slate-100">
+    <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
+      <div className="mx-auto max-w-lg rounded-2xl bg-white p-6 shadow-xl">
 
-      {/* HEADER */}
-
-      <header className="bg-slate-900 px-6 py-5 text-white shadow-lg">
-
-        <div className="mx-auto max-w-5xl">
-
-          <h1 className="text-2xl font-bold">
-            Smart Attendance
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-slate-900">
+            Smart Attendance System
           </h1>
 
-          <p className="text-sm text-slate-300">
-            Employee Attendance
+          <p className="mt-2 text-sm text-slate-600">
+            Employee Check-Out
           </p>
-
         </div>
 
-      </header>
+        {error && (
+          <div className="mt-5 rounded-lg bg-red-50 p-4 text-sm font-medium text-red-700">
+            ❌ {error}
+          </div>
+        )}
 
-      {/* MAIN */}
+        {message && (
+          <div className="mt-5 rounded-lg bg-green-50 p-4 text-sm font-medium text-green-700">
+            {message}
+          </div>
+        )}
 
-      <div className="mx-auto max-w-2xl px-6 py-8">
-
-        <div className="rounded-2xl bg-white p-6 shadow-lg">
-
-          <h2 className="text-2xl font-bold text-slate-900">
-            Employee Attendance
+        <section className="mt-6">
+          <h2 className="text-lg font-semibold text-slate-900">
+            1. Employee Information *
           </h2>
 
-          <p className="mt-2 text-sm text-slate-600">
-            Complete the attendance verification process.
+          <label className="mt-4 block text-sm font-semibold">
+            Employee ID *
+          </label>
+
+          <input
+            type="text"
+            value={employeeId}
+            onChange={(e) => setEmployeeId(e.target.value)}
+            placeholder="Enter Employee ID"
+            required
+            autoComplete="username"
+            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500"
+          />
+
+          <label className="mt-4 block text-sm font-semibold">
+            Employee Password *
+          </label>
+
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter Employee Password"
+            required
+            minLength={6}
+            autoComplete="current-password"
+            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500"
+          />
+
+          <p className="mt-2 text-xs text-slate-500">
+            Password is securely verified by the attendance server.
+          </p>
+        </section>
+
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold text-slate-900">
+            2. Employee Photo *
+          </h2>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Employee photo is compulsory.
           </p>
 
-          {/* ERROR */}
-
-          {error && (
-            <div className="mt-5 rounded-lg bg-red-50 p-4 text-sm text-red-700">
-
-              <strong>Error:</strong> {error}
-
-            </div>
+          {!cameraOpen && !photoCaptured && (
+            <button
+              type="button"
+              onClick={openCamera}
+              disabled={loading}
+              className="mt-4 w-full rounded-lg bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
+            >
+              📷 Open Camera
+            </button>
           )}
 
-          {/* ================================================= */}
-          {/* STEP 1 - QR */}
-          {/* ================================================= */}
-
-          {step === "qr" && (
-
-            <div className="mt-8">
-
-              <div className="text-sm font-semibold text-blue-600">
-                STEP 1
-              </div>
-
-              <h3 className="mt-1 text-xl font-bold">
-                Scan Company QR
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-600">
-                Scan the official company attendance QR code.
-              </p>
-
-              <div
-                id="attendance-qr-reader"
-                className="mt-6 w-full overflow-hidden rounded-xl border bg-black"
+          {cameraOpen && (
+            <div className="mt-4">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full rounded-xl bg-black"
               />
 
-              {!scannerStarted && (
-
-                <button
-                  onClick={startScanner}
-                  className="mt-5 w-full rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
-                >
-                  Start QR Scanner
-                </button>
-
-              )}
-
-              {scannerStarted && (
-
-                <button
-                  onClick={stopScanner}
-                  className="mt-5 w-full rounded-lg bg-red-600 px-5 py-3 font-semibold text-white hover:bg-red-700"
-                >
-                  Stop Scanner
-                </button>
-
-              )}
-
-            </div>
-
-          )}
-
-          {/* ================================================= */}
-          {/* STEP 2 - QR VERIFIED */}
-          {/* ================================================= */}
-
-          {step === "verification" && (
-
-            <div className="mt-8">
-
-              <div className="rounded-xl bg-green-50 p-5">
-
-                <div className="text-sm font-semibold text-green-600">
-                  STEP 2
-                </div>
-
-                <h3 className="mt-1 text-xl font-bold text-green-800">
-                  QR Code Verified
-                </h3>
-
-                <p className="mt-3 text-sm text-green-700">
-                  QR code detected successfully.
-                </p>
-
-                <div className="mt-4 rounded-lg bg-white p-4">
-
-                  <p className="text-xs font-semibold text-slate-500">
-                    QR RESULT
-                  </p>
-
-                  <p className="mt-2 break-all text-sm text-slate-700">
-                    {qrResult}
-                  </p>
-
-                </div>
-
-              </div>
-
               <button
-                onClick={() => setStep("photo")}
-                className="mt-6 w-full rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
+                type="button"
+                onClick={capturePhoto}
+                className="mt-4 w-full rounded-lg bg-green-600 px-4 py-3 font-semibold text-white"
               >
-                Continue to Photo
+                📸 Capture Photo
               </button>
 
-            </div>
-
-          )}
-
-          {/* ================================================= */}
-          {/* STEP 3 - PHOTO */}
-          {/* ================================================= */}
-
-          {step === "photo" && (
-
-            <div className="mt-8">
-
-              <div className="text-sm font-semibold text-blue-600">
-                STEP 3
-              </div>
-
-              <h3 className="mt-1 text-xl font-bold">
-                Take Employee Photo
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-600">
-                Capture a photo of the employee.
-              </p>
-
-              {/* CAMERA */}
-
-              {!photoTaken && (
-
-                <div className="mt-6">
-
-                  <div className="overflow-hidden rounded-xl bg-black">
-
-                    <video
-                      ref={photoVideoRef}
-                      className="h-auto w-full"
-                      autoPlay
-                      playsInline
-                      muted
-                    />
-
-                  </div>
-
-                  {!photoCameraStarted && (
-
-                    <button
-                      onClick={startPhotoCamera}
-                      className="mt-5 w-full rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
-                    >
-                      Open Camera
-                    </button>
-
-                  )}
-
-                  {photoCameraStarted && (
-
-                    <button
-                      onClick={takePhoto}
-                      className="mt-5 w-full rounded-lg bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700"
-                    >
-                      📷 Take Photo
-                    </button>
-
-                  )}
-
-                </div>
-
-              )}
-
-              {/* PHOTO PREVIEW */}
-
-              {photoTaken && photoData && (
-
-                <div className="mt-6">
-
-                  <p className="mb-3 text-sm font-semibold text-slate-700">
-                    Photo Preview
-                  </p>
-
-                  <img
-                    src={photoData}
-                    alt="Employee captured"
-                    className="w-full rounded-xl border"
-                  />
-
-                  <div className="mt-5 grid gap-3">
-
-                    <button
-                      onClick={retakePhoto}
-                      className="w-full rounded-lg bg-slate-600 px-5 py-3 font-semibold text-white"
-                    >
-                      Retake Photo
-                    </button>
-
-                    <button
-                      onClick={() => setStep("biometric")}
-                      className="w-full rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white"
-                    >
-                      Continue to Biometric
-                    </button>
-
-                  </div>
-
-                </div>
-
-              )}
-
-            </div>
-
-          )}
-
-          {/* ================================================= */}
-          {/* STEP 4 - BIOMETRIC */}
-          {/* ================================================= */}
-
-          {step === "biometric" && (
-
-            <div className="mt-8">
-
-              <div className="text-sm font-semibold text-blue-600">
-                STEP 4
-              </div>
-
-              <h3 className="mt-1 text-xl font-bold">
-                Biometric Verification
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-600">
-                Verify the employee using device biometric authentication.
-              </p>
-
-              <div className="mt-6 rounded-xl bg-slate-50 p-8 text-center">
-
-                <div className="text-5xl">
-                  👆
-                </div>
-
-                <p className="mt-4 font-semibold">
-                  Fingerprint / Device Biometric
-                </p>
-
-                <p className="mt-2 text-sm text-slate-500">
-                  WebAuthn verification will be connected next.
-                </p>
-
-              </div>
-
               <button
-                onClick={() => setStep("location")}
-                className="mt-6 w-full rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white"
+                type="button"
+                onClick={stopCamera}
+                className="mt-3 w-full rounded-lg border px-4 py-3"
               >
-                Verify Biometric
+                Cancel Camera
               </button>
-
             </div>
-
           )}
 
-          {/* ================================================= */}
-          {/* STEP 5 - LOCATION */}
-          {/* ================================================= */}
+          <canvas ref={canvasRef} className="hidden" />
 
-          {step === "location" && (
+          {photoPreview && (
+            <div className="mt-4">
+              <img
+                src={photoPreview}
+                alt="Employee captured photo"
+                className="mx-auto h-56 w-56 rounded-xl object-cover"
+              />
 
-            <div className="mt-8">
-
-              <div className="text-sm font-semibold text-blue-600">
-                STEP 5
-              </div>
-
-              <h3 className="mt-1 text-xl font-bold">
-                Location Verification
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-600">
-                Your location will be checked against the company
-                attendance geofence.
+              <p className="mt-2 text-center font-semibold text-green-600">
+                ✓ Photo Captured
               </p>
 
               <button
-                onClick={() => setStep("employee")}
-                className="mt-6 w-full rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white"
+                type="button"
+                onClick={retakePhoto}
+                disabled={loading}
+                className="mt-3 w-full rounded-lg border px-4 py-3 disabled:opacity-50"
               >
-                Get My Location
+                🔄 Retake Photo
               </button>
-
             </div>
-
           )}
+        </section>
 
-          {/* ================================================= */}
-          {/* STEP 6 - EMPLOYEE */}
-          {/* ================================================= */}
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold text-slate-900">
+            3. Mobile Location (Optional)
+          </h2>
 
-          {step === "employee" && (
+          <p className="mt-1 text-sm text-slate-500">
+            You may capture your current mobile location if you want
+            to save it with your attendance.
+          </p>
 
-            <div className="mt-8">
+          <button
+            type="button"
+            onClick={getCurrentLocation}
+            disabled={loading}
+            className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            📍 Get My Location
+          </button>
 
-              <div className="text-sm font-semibold text-blue-600">
-                STEP 6
-              </div>
+          {latitude !== null && longitude !== null && (
+            <div className="mt-4 rounded-lg bg-green-50 p-4 text-sm">
+              <p>Latitude: {latitude}</p>
+              <p>Longitude: {longitude}</p>
 
-              <h3 className="mt-1 text-xl font-bold">
-                Employee Details
-              </h3>
-
-              <div className="mt-6 space-y-5">
-
-                <div>
-
-                  <label className="mb-2 block text-sm font-medium">
-                    Employee ID
-                  </label>
-
-                  <input
-                    type="text"
-                    placeholder="Enter Employee ID"
-                    className="w-full rounded-lg border px-4 py-3"
-                  />
-
-                </div>
-
-                <div>
-
-                  <label className="mb-2 block text-sm font-medium">
-                    Employee Name
-                  </label>
-
-                  <input
-                    type="text"
-                    placeholder="Enter Employee Name"
-                    className="w-full rounded-lg border px-4 py-3"
-                  />
-
-                </div>
-
-                <button
-                  onClick={() => setStep("checkin")}
-                  className="w-full rounded-lg bg-green-600 px-5 py-3 font-semibold text-white"
-                >
-                  CHECK IN
-                </button>
-
-              </div>
-
-            </div>
-
-          )}
-
-          {/* ================================================= */}
-          {/* STEP 7 - CHECK IN */}
-          {/* ================================================= */}
-
-          {step === "checkin" && (
-
-            <div className="mt-8">
-
-              <div className="rounded-xl bg-green-50 p-6">
-
-                <div className="text-sm font-semibold text-green-600">
-                  STEP 7
-                </div>
-
-                <h3 className="mt-1 text-xl font-bold text-green-800">
-                  Ready for Check-In
-                </h3>
-
-                <p className="mt-2 text-sm text-green-700">
-                  Verification process completed.
-                </p>
-
-              </div>
-
-              <button
-                onClick={() => setStep("checkout")}
-                className="mt-6 w-full rounded-lg bg-green-600 px-5 py-3 font-semibold text-white"
-              >
-                CONFIRM CHECK IN
-              </button>
-
-            </div>
-
-          )}
-
-          {/* ================================================= */}
-          {/* STEP 8 - CHECK OUT */}
-          {/* ================================================= */}
-
-          {step === "checkout" && (
-
-            <div className="mt-8">
-
-              <div className="rounded-xl bg-green-50 p-6">
-
-                <h3 className="text-xl font-bold text-green-800">
-                  Check-In Successful
-                </h3>
-
-                <p className="mt-2 text-green-700">
-                  Employee is currently checked in.
-                </p>
-
-              </div>
-
-              <button
-                onClick={() => setStep("completed")}
-                className="mt-6 w-full rounded-lg bg-red-600 px-5 py-3 font-semibold text-white"
-              >
-                CHECK OUT
-              </button>
-
-            </div>
-
-          )}
-
-          {/* ================================================= */}
-          {/* STEP 9 - COMPLETE */}
-          {/* ================================================= */}
-
-          {step === "completed" && (
-
-            <div className="mt-8 rounded-xl bg-green-50 p-6 text-center">
-
-              <div className="text-5xl">
-                ✅
-              </div>
-
-              <h3 className="mt-4 text-2xl font-bold text-green-800">
-                Attendance Completed
-              </h3>
-
-              <p className="mt-2 text-green-700">
-                Check-in and check-out completed.
+              <p className="mt-2 font-semibold text-green-600">
+                ✓ Location Captured
               </p>
-
             </div>
-
           )}
 
+          {latitude === null && longitude === null && (
+            <p className="mt-3 text-xs text-slate-500">
+              Location is optional. You can Check Out without
+              providing your location.
+            </p>
+          )}
+        </section>
+
+        <section className="mt-8">
+          <button
+            type="button"
+            onClick={markCheckOut}
+            disabled={loading}
+            className="w-full rounded-lg bg-green-600 px-4 py-4 text-lg font-bold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading
+              ? "Saving Attendance..."
+              : "✓ CHECK OUT"}
+          </button>
+        </section>
+
+        <div className="mt-6 rounded-xl bg-slate-50 p-4">
+          <p className="font-semibold text-slate-900">
+            Check-Out Requirements
+          </p>
+
+          <ul className="mt-3 space-y-2 text-sm">
+            <li>
+              {employeeId.trim() ? "✓" : "○"} Employee ID
+            </li>
+
+            <li>
+              {password.trim() ? "✓" : "○"} Employee Password
+            </li>
+
+            <li>
+              {photoCaptured ? "✓" : "○"} Employee Photo
+            </li>
+
+            <li>✓ Mobile Location (Optional)</li>
+          </ul>
+        </div>
+
+        <div className="mt-5 rounded-xl border border-green-100 bg-green-50 p-4 text-xs text-green-800">
+          <p className="font-semibold">
+            ✓ Check-Out Information
+          </p>
+
+          <p className="mt-2">
+            Employee ID and password are required before Check-Out.
+          </p>
+
+          <p className="mt-2">
+            Employee photo is compulsory.
+          </p>
+
+          <p className="mt-2">
+            Mobile location is optional.
+          </p>
+
+          <p className="mt-2">
+            Check-Out records the current date and time against
+            the employee&apos;s active attendance.
+          </p>
         </div>
 
       </div>
-
     </main>
   );
 }
