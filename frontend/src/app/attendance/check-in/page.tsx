@@ -172,7 +172,7 @@ export default function CheckInPage() {
   };
 
   // --------------------------------
-  // GET MY LOCATION
+  // GET MY LOCATION - OPTIONAL
   // --------------------------------
 
   const getCurrentLocation = () => {
@@ -202,7 +202,7 @@ export default function CheckInPage() {
         setLongitude(currentLongitude);
 
         setMessage(
-          "✓ Location captured successfully. You can now Check In."
+          "✓ Location captured successfully."
         );
       },
       (err) => {
@@ -213,19 +213,19 @@ export default function CheckInPage() {
 
         if (err.code === 1) {
           setError(
-            "Location permission was denied. Please allow location access for this website."
+            "Location permission was denied. You can continue Check-In without location."
           );
         } else if (err.code === 2) {
           setError(
-            "Your location could not be determined. Please turn on GPS/location services."
+            "Your location could not be determined. You can continue Check-In without location."
           );
         } else if (err.code === 3) {
           setError(
-            "Location request timed out. Please try again."
+            "Location request timed out. You can continue Check-In without location."
           );
         } else {
           setError(
-            "Unable to get your current location."
+            "Unable to get your current location. You can continue Check-In without location."
           );
         }
 
@@ -270,15 +270,8 @@ export default function CheckInPage() {
       return false;
     }
 
-    if (
-      latitude === null ||
-      longitude === null
-    ) {
-      setError(
-        "Please click Get My Location before Check In."
-      );
-      return false;
-    }
+    // Mobile Location is OPTIONAL.
+    // No location validation is performed here.
 
     return true;
   };
@@ -541,17 +534,17 @@ export default function CheckInPage() {
         </section>
 
         {/* -------------------------------- */}
-        {/* MOBILE LOCATION */}
+        {/* MOBILE LOCATION - OPTIONAL */}
         {/* -------------------------------- */}
 
         <section className="mt-8">
 
           <h2 className="text-lg font-semibold text-slate-900">
-            3. Mobile Location *
+            3. Mobile Location (Optional)
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Click Get My Location to capture your current mobile location.
+            You may capture your current mobile location if you want to save it with your attendance.
           </p>
 
           <button
@@ -580,6 +573,13 @@ export default function CheckInPage() {
                 </p>
 
               </div>
+            )}
+
+          {latitude === null &&
+            longitude === null && (
+              <p className="mt-3 text-xs text-slate-500">
+                Location is optional. You can Check In without providing your location.
+              </p>
             )}
 
         </section>
@@ -634,10 +634,7 @@ export default function CheckInPage() {
             </li>
 
             <li>
-              {latitude !== null &&
-              longitude !== null
-                ? "✓"
-                : "○"} Mobile Location
+              ✓ Mobile Location (Optional)
             </li>
 
           </ul>
@@ -655,8 +652,11 @@ export default function CheckInPage() {
           </p>
 
           <p className="mt-2">
-            Click Get My Location before Check In.
-            Your latitude and longitude will be saved with the attendance record.
+            Mobile location is optional. Employees can Check In without allowing location access.
+          </p>
+
+          <p className="mt-2">
+            If Get My Location is used, the captured latitude and longitude will be saved with the attendance record.
           </p>
 
           <p className="mt-2">
