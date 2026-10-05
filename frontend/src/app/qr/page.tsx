@@ -34,12 +34,12 @@ export default function QRPage() {
         <h1
           style={{
             margin: 0,
-            fontSize: "32px",
+            fontSize: "30px",
             fontWeight: 700,
             color: "#111827",
           }}
         >
-          Smart Attendance
+          TALENTRONAUT PVT LTD
         </h1>
 
         <p
@@ -49,7 +49,7 @@ export default function QRPage() {
             fontSize: "16px",
           }}
         >
-          Scan QR Code to access Attendance
+          Employee Attendance
         </p>
 
         {/* QR CODE ONLY */}
@@ -71,7 +71,7 @@ export default function QRPage() {
           >
             <img
               src={QR_IMAGE_URL}
-              alt="Smart Attendance QR Code"
+              alt="TALENTRONAUT PVT LTD Attendance QR Code"
               width={300}
               height={300}
               style={{
@@ -90,7 +90,7 @@ export default function QRPage() {
             color: "#6b7280",
           }}
         >
-          Scan this QR code to open Employee Check-In
+          Scan this QR code to access Employee Check-In
         </p>
 
         <p
@@ -100,7 +100,7 @@ export default function QRPage() {
             color: "#9ca3af",
           }}
         >
-          Smart Attendance System
+          TALENTRONAUT PVT LTD
         </p>
       </div>
     </main>
