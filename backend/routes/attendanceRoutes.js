@@ -1,7 +1,6 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcrypt");
-const { isInsideGeofence } = require("../utils/geofence");
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -9,6 +8,7 @@ const prisma = new PrismaClient();
 // ======================================================
 // GET ALL ATTENDANCE RECORDS
 // ======================================================
+
 router.get("/", async (req, res) => {
   try {
     const attendance = await prisma.attendance.findMany({
@@ -20,6 +20,7 @@ router.get("/", async (req, res) => {
             name: true,
             email: true,
             department: true,
+            location: true,
             photoUrl: true,
           },
         },
@@ -47,6 +48,7 @@ router.get("/", async (req, res) => {
 // ======================================================
 // POST - MARK CHECK-IN
 // ======================================================
+
 router.post("/", async (req, res) => {
   try {
     const {
@@ -62,6 +64,7 @@ router.post("/", async (req, res) => {
     // --------------------------------------------------
     // 1. Validate Employee ID
     // --------------------------------------------------
+
     if (!employeeId || !employeeId.trim()) {
       return res.status(400).json({
         success: false,
@@ -72,6 +75,7 @@ router.post("/", async (req, res) => {
     // --------------------------------------------------
     // 2. Validate Employee Password
     // --------------------------------------------------
+
     if (!password || !password.trim()) {
       return res.status(400).json({
         success: false,
@@ -82,6 +86,7 @@ router.post("/", async (req, res) => {
     // --------------------------------------------------
     // 3. Find Employee
     // --------------------------------------------------
+
     const employee = await prisma.employee.findUnique({
       where: {
         employeeId: employeeId.trim(),
@@ -98,6 +103,7 @@ router.post("/", async (req, res) => {
     // --------------------------------------------------
     // 4. Verify Employee Password
     // --------------------------------------------------
+
     if (!employee.passwordHash) {
       return res.status(403).json({
         success: false,
@@ -119,50 +125,50 @@ router.post("/", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 5. Validate GPS coordinates
+    // 5. OPTIONAL GPS LOCATION
     // --------------------------------------------------
-    const userLatitude = Number(latitude);
-    const userLongitude = Number(longitude);
+    // Location is NOT compulsory.
+    //
+    // If latitude and longitude are provided,
+    // they are saved.
+    //
+    // If they are not provided, NULL is saved.
+    //
+    // There is NO geofence.
+    // There is NO radius restriction.
+    // --------------------------------------------------
+
+    let userLatitude = null;
+    let userLongitude = null;
 
     if (
-      !Number.isFinite(userLatitude) ||
-      !Number.isFinite(userLongitude)
+      latitude !== undefined &&
+      latitude !== null &&
+      latitude !== ""
     ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid latitude or longitude.",
-      });
+      const parsedLatitude = Number(latitude);
+
+      if (Number.isFinite(parsedLatitude)) {
+        userLatitude = parsedLatitude;
+      }
+    }
+
+    if (
+      longitude !== undefined &&
+      longitude !== null &&
+      longitude !== ""
+    ) {
+      const parsedLongitude = Number(longitude);
+
+      if (Number.isFinite(parsedLongitude)) {
+        userLongitude = parsedLongitude;
+      }
     }
 
     // --------------------------------------------------
-    // 6. Check Geofence
+    // 6. Get Today's Date Range
     // --------------------------------------------------
-    let geofenceResult;
 
-    try {
-      geofenceResult = isInsideGeofence(
-        userLatitude,
-        userLongitude
-      );
-    } catch (error) {
-      return res.status(500).json({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    if (!geofenceResult.allowed) {
-      return res.status(403).json({
-        success: false,
-        message: "You are outside the attendance location.",
-        distance: Math.round(geofenceResult.distance),
-        allowedRadius: geofenceResult.radius,
-      });
-    }
-
-    // --------------------------------------------------
-    // 7. Get Today's Date Range
-    // --------------------------------------------------
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
@@ -170,8 +176,9 @@ router.post("/", async (req, res) => {
     endOfDay.setHours(23, 59, 59, 999);
 
     // --------------------------------------------------
-    // 8. Prevent Duplicate Check-In
+    // 7. Prevent Duplicate Check-In
     // --------------------------------------------------
+
     const existingAttendance =
       await prisma.attendance.findFirst({
         where: {
@@ -193,40 +200,47 @@ router.post("/", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 9. Create Attendance Record
+    // 8. Create Attendance Record
     // --------------------------------------------------
-    const attendance = await prisma.attendance.create({
-      data: {
-        employeeId: employee.employeeId,
 
-        status: status || "Present",
+    const attendance =
+      await prisma.attendance.create({
+        data: {
+          employeeId: employee.employeeId,
 
-        checkIn: checkIn
-          ? new Date(checkIn)
-          : new Date(),
+          status: status || "Present",
 
-        checkOut: checkOut
-          ? new Date(checkOut)
-          : null,
-      },
+          checkIn: checkIn
+            ? new Date(checkIn)
+            : new Date(),
 
-      include: {
-        employee: {
-          select: {
-            id: true,
-            employeeId: true,
-            name: true,
-            email: true,
-            department: true,
-            photoUrl: true,
+          checkOut: checkOut
+            ? new Date(checkOut)
+            : null,
+
+          latitude: userLatitude,
+          longitude: userLongitude,
+        },
+
+        include: {
+          employee: {
+            select: {
+              id: true,
+              employeeId: true,
+              name: true,
+              email: true,
+              department: true,
+              location: true,
+              photoUrl: true,
+            },
           },
         },
-      },
-    });
+      });
 
     // --------------------------------------------------
-    // 10. Success Response
+    // 9. Success Response
     // --------------------------------------------------
+
     res.status(201).json({
       success: true,
       message: "Attendance marked successfully.",
@@ -246,92 +260,107 @@ router.post("/", async (req, res) => {
 // ======================================================
 // PUT - MARK CHECK-OUT
 // ======================================================
-router.put("/checkout/:employeeId", async (req, res) => {
-  try {
-    const { employeeId } = req.params;
 
-    // --------------------------------------------------
-    // 1. Validate Employee
-    // --------------------------------------------------
-    const employee = await prisma.employee.findUnique({
-      where: {
-        employeeId,
-      },
-    });
+router.put(
+  "/checkout/:employeeId",
+  async (req, res) => {
+    try {
+      const { employeeId } = req.params;
 
-    if (!employee) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found.",
-      });
-    }
+      // ------------------------------------------------
+      // 1. Validate Employee
+      // ------------------------------------------------
 
-    // --------------------------------------------------
-    // 2. Find Active Attendance
-    // --------------------------------------------------
-    const attendance =
-      await prisma.attendance.findFirst({
-        where: {
-          employeeId,
-          checkOut: null,
-        },
-        orderBy: {
-          date: "desc",
-        },
-      });
+      const employee =
+        await prisma.employee.findUnique({
+          where: {
+            employeeId,
+          },
+        });
 
-    if (!attendance) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "No active attendance record found for this employee.",
-      });
-    }
+      if (!employee) {
+        return res.status(404).json({
+          success: false,
+          message: "Employee not found.",
+        });
+      }
 
-    // --------------------------------------------------
-    // 3. Update Check-Out
-    // --------------------------------------------------
-    const updatedAttendance =
-      await prisma.attendance.update({
-        where: {
-          id: attendance.id,
-        },
+      // ------------------------------------------------
+      // 2. Find Active Attendance
+      // ------------------------------------------------
 
-        data: {
-          checkOut: new Date(),
-        },
+      const attendance =
+        await prisma.attendance.findFirst({
+          where: {
+            employeeId,
+            checkOut: null,
+          },
+          orderBy: {
+            date: "desc",
+          },
+        });
 
-        include: {
-          employee: {
-            select: {
-              id: true,
-              employeeId: true,
-              name: true,
-              email: true,
-              department: true,
-              photoUrl: true,
+      if (!attendance) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "No active attendance record found for this employee.",
+        });
+      }
+
+      // ------------------------------------------------
+      // 3. Update Check-Out
+      // ------------------------------------------------
+
+      const updatedAttendance =
+        await prisma.attendance.update({
+          where: {
+            id: attendance.id,
+          },
+
+          data: {
+            checkOut: new Date(),
+          },
+
+          include: {
+            employee: {
+              select: {
+                id: true,
+                employeeId: true,
+                name: true,
+                email: true,
+                department: true,
+                location: true,
+                photoUrl: true,
+              },
             },
           },
-        },
+        });
+
+      // ------------------------------------------------
+      // 4. Success Response
+      // ------------------------------------------------
+
+      res.json({
+        success: true,
+        message:
+          "Check-out marked successfully.",
+        attendance: updatedAttendance,
       });
+    } catch (error) {
+      console.error("CHECKOUT ERROR:", error);
 
-    // --------------------------------------------------
-    // 4. Success Response
-    // --------------------------------------------------
-    res.json({
-      success: true,
-      message: "Check-out marked successfully.",
-      attendance: updatedAttendance,
-    });
-  } catch (error) {
-    console.error("CHECKOUT ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to mark check-out.",
-      error: error.message,
-    });
+      res.status(500).json({
+        success: false,
+        message: "Failed to mark check-out.",
+        error: error.message,
+      });
+    }
   }
-});
+);
+
+// ======================================================
+// EXPORT ROUTER
+// ======================================================
 
 module.exports = router;
