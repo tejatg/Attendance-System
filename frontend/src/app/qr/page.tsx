@@ -162,22 +162,6 @@ export default function QRPage() {
             >
               Check Out
             </Link>
-
-            <Link
-              href="/employees"
-              style={{
-                display: "block",
-                padding: "16px 20px",
-                borderRadius: "10px",
-                background: "#7c3aed",
-                color: "#ffffff",
-                textDecoration: "none",
-                fontSize: "18px",
-                fontWeight: 600,
-              }}
-            >
-              Register a New Employee
-            </Link>
           </div>
         </div>
 
