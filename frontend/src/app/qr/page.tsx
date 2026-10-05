@@ -33,6 +33,8 @@ export default function QRPage() {
           textAlign: "center",
         }}
       >
+        {/* TITLE */}
+
         <h1
           style={{
             margin: 0,
@@ -54,7 +56,8 @@ export default function QRPage() {
           Scan QR Code to access Attendance
         </p>
 
-        {/* QR CODE */}
+        {/* QR CODE FIRST */}
+
         <div
           style={{
             marginTop: "24px",
@@ -94,7 +97,8 @@ export default function QRPage() {
           Scan this QR code to open Employee Check-In
         </p>
 
-        {/* ATTENDANCE OPTIONS */}
+        {/* CHECK IN / CHECK OUT AFTER QR */}
+
         <div
           style={{
             marginTop: "30px",
@@ -110,7 +114,7 @@ export default function QRPage() {
               color: "#111827",
             }}
           >
-            Smart Attendance
+            Attendance
           </h2>
 
           <p
@@ -121,7 +125,7 @@ export default function QRPage() {
               fontSize: "15px",
             }}
           >
-            Please select an option
+            Select an attendance option
           </p>
 
           <div
@@ -131,6 +135,8 @@ export default function QRPage() {
               gap: "14px",
             }}
           >
+            {/* CHECK IN */}
+
             <Link
               href="/attendance/check-in"
               style={{
@@ -146,6 +152,8 @@ export default function QRPage() {
             >
               Check In
             </Link>
+
+            {/* CHECK OUT */}
 
             <Link
               href="/attendance"
@@ -164,6 +172,8 @@ export default function QRPage() {
             </Link>
           </div>
         </div>
+
+        {/* FOOTER */}
 
         <p
           style={{
