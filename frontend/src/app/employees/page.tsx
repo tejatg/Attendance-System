@@ -1,63 +1,58 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
-const API_URL = "https://attendance-backend-2nky.onrender.com";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://attendance-backend-2nky.onrender.com";
 
-export default function EmployeesPage() {
+export default function RegisterEmployeePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [name, setName] = useState("");
   const [department, setDepartment] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [cameraStream, setCameraStream] =
-    useState<MediaStream | null>(null);
-
-  const [photoCaptured, setPhotoCaptured] = useState(false);
-  const [photoPreview, setPhotoPreview] = useState("");
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [photoPreview, setPhotoPreview] = useState("");
 
-  const [latitude, setLatitude] = useState<number | null>(null);
-  const [longitude, setLongitude] = useState<number | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+
+  const [locationEnabled, setLocationEnabled] = useState(false);
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
 
   const [loading, setLoading] = useState(false);
-  const [registered, setRegistered] = useState(false);
-
-  const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
-  const stopCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach((track) => track.stop());
-    }
-
-    setCameraStream(null);
-    setCameraOpen(false);
-  };
-
   useEffect(() => {
+    startCamera();
+
     return () => {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((track) => track.stop());
+      stopCamera();
+
+      if (photoPreview) {
+        URL.revokeObjectURL(photoPreview);
       }
     };
-  }, [cameraStream]);
+  }, []);
 
-  const openCamera = async () => {
-    if (registered) {
-      return;
-    }
-
-    setError("");
-    setMessage("");
-
+  async function startCamera() {
     try {
+      setCameraError("");
+
       if (!navigator.mediaDevices?.getUserMedia) {
-        setError("Camera is not supported by this browser.");
+        setCameraError("Camera access is not supported by this browser.");
         return;
       }
 
@@ -70,31 +65,30 @@ export default function EmployeesPage() {
         audio: false,
       });
 
-      setCameraStream(stream);
-      setCameraOpen(true);
+      streamRef.current = stream;
 
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
 
-          videoRef.current.play().catch((err) => {
-            console.error("Video play error:", err);
-          });
-        }
-      }, 100);
-    } catch (err) {
-      console.error("Camera error:", err);
-
-      setError(
-        "Unable to open camera. Please allow camera permission."
+      setCameraReady(true);
+    } catch {
+      setCameraError(
+        "Camera permission is required to capture the employee identity photo."
       );
+      setCameraReady(false);
     }
-  };
+  }
 
-  const capturePhoto = () => {
-    setError("");
-    setMessage("");
+  function stopCamera() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  }
 
+  function capturePhoto() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
@@ -103,8 +97,8 @@ export default function EmployeesPage() {
       return;
     }
 
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      setError("Camera is not ready. Please wait a moment.");
+    if (!video.videoWidth || !video.videoHeight) {
+      setError("Camera image is not ready. Please wait a moment.");
       return;
     }
 
@@ -114,7 +108,7 @@ export default function EmployeesPage() {
     const context = canvas.getContext("2d");
 
     if (!context) {
-      setError("Unable to capture photo.");
+      setError("Unable to capture the camera image.");
       return;
     }
 
@@ -133,540 +127,644 @@ export default function EmployeesPage() {
           return;
         }
 
-        const image = canvas.toDataURL("image/jpeg", 0.9);
+        if (photoPreview) {
+          URL.revokeObjectURL(photoPreview);
+        }
 
-        setPhotoPreview(image);
+        const preview = URL.createObjectURL(blob);
+
         setPhotoBlob(blob);
-        setPhotoCaptured(true);
-
-        stopCamera();
-
-        setMessage("Employee photo captured successfully.");
+        setPhotoPreview(preview);
+        setError("");
       },
       "image/jpeg",
       0.9
     );
-  };
+  }
 
-  const retakePhoto = () => {
-    if (registered) {
-      return;
+  function retakePhoto() {
+    if (photoPreview) {
+      URL.revokeObjectURL(photoPreview);
     }
 
-    setPhotoPreview("");
     setPhotoBlob(null);
-    setPhotoCaptured(false);
+    setPhotoPreview("");
     setError("");
-    setMessage("");
+  }
 
-    openCamera();
-  };
-
-  const getCurrentLocation = () => {
-    if (registered) {
-      return;
-    }
-
-    setError("");
-    setMessage("");
-
+  function enableLocation() {
     if (!navigator.geolocation) {
-      setError("GPS is not supported by this browser.");
+      setError("Location is not supported by this browser.");
       return;
     }
-
-    setMessage("Requesting your current location...");
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setLatitude(position.coords.latitude);
-        setLongitude(position.coords.longitude);
-
-        setMessage("Location captured successfully.");
+        setLatitude(String(position.coords.latitude));
+        setLongitude(String(position.coords.longitude));
+        setLocationEnabled(true);
+        setError("");
       },
-      (err) => {
-        console.error("Location error:", err);
-
-        if (err.code === 1) {
-          setError(
-            "Location permission was denied. You can continue registration without location."
-          );
-        } else if (err.code === 2) {
-          setError(
-            "Your location could not be determined. You can continue registration without location."
-          );
-        } else if (err.code === 3) {
-          setError(
-            "Location request timed out. You can continue registration without location."
-          );
-        } else {
-          setError(
-            "Unable to get your current location. You can continue registration without location."
-          );
-        }
-
-        setMessage("");
+      () => {
+        setError(
+          "Location permission was not granted. You can continue without location."
+        );
+        setLocationEnabled(false);
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
+        timeout: 10000,
         maximumAge: 0,
       }
     );
-  };
+  }
 
-  const validateForm = () => {
-    if (!name.trim()) {
-      setError("Employee Name is required.");
-      return false;
-    }
+  function disableLocation() {
+    setLocationEnabled(false);
+    setLatitude("");
+    setLongitude("");
+  }
 
-    if (!department.trim()) {
-      setError("Employee Department is required.");
-      return false;
-    }
+  function generateEmployeeId() {
+    return `EMP${Date.now().toString().slice(-8)}`;
+  }
 
-    if (!password.trim()) {
-      setError("Employee Password is required.");
-      return false;
-    }
+  function generateEmail(employeeName: string) {
+    const cleanName = employeeName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, ".")
+      .replace(/^\.+|\.+$/g, "");
 
-    if (password.length < 6) {
-      setError(
-        "Employee Password must be at least 6 characters."
-      );
-      return false;
-    }
+    return `${cleanName || "employee"}.${Date.now()}@talentronaut.local`;
+  }
 
-    if (!confirmPassword.trim()) {
-      setError("Confirm Employee Password is required.");
-      return false;
-    }
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    if (password !== confirmPassword) {
-      setError(
-        "Employee Password and Confirm Employee Password do not match."
-      );
-      return false;
-    }
+    setError("");
+    setSuccess("");
 
-    if (!photoCaptured || !photoBlob) {
-      setError(
-        "Employee photo is compulsory. Please capture your photo."
-      );
-      return false;
-    }
+    const cleanName = name.trim();
+    const cleanDepartment = department.trim();
 
-    return true;
-  };
-
-  const registerEmployee = async () => {
-    if (registered) {
+    if (!cleanName) {
+      setError("Employee name is required.");
       return;
     }
 
-    setError("");
-    setMessage("");
+    if (!cleanDepartment) {
+      setError("Department is required.");
+      return;
+    }
 
-    if (!validateForm()) {
+    if (password.length < 6) {
+      setError("Password must contain at least 6 characters.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Password and confirmation password do not match.");
       return;
     }
 
     if (!photoBlob) {
-      setError("Employee photo is compulsory.");
+      setError("Employee identity photo is compulsory.");
       return;
     }
 
     try {
       setLoading(true);
 
-      setMessage("Registering employee...");
-
-      const timestamp = Date.now();
-
-      const employeeId =
-        "EMP" + timestamp.toString().slice(-8);
-
-      const safeName = name
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ".");
-
-      const email =
-        safeName +
-        "." +
-        timestamp +
-        "@talentronaut.local";
+      const employeeId = generateEmployeeId();
+      const email = generateEmail(cleanName);
 
       const formData = new FormData();
 
       formData.append("employeeId", employeeId);
-      formData.append("name", name.trim());
+      formData.append("name", cleanName);
       formData.append("email", email);
-      formData.append("department", department.trim());
+      formData.append("department", cleanDepartment);
       formData.append("password", password);
       formData.append("confirmPassword", confirmPassword);
 
-      if (latitude !== null) {
-        formData.append("latitude", String(latitude));
+      if (locationEnabled && latitude && longitude) {
+        formData.append(
+          "location",
+          `${latitude}, ${longitude}`
+        );
       }
-
-      if (longitude !== null) {
-        formData.append("longitude", String(longitude));
-      }
-
-      formData.append(
-        "location",
-        latitude !== null && longitude !== null
-          ? `${latitude},${longitude}`
-          : ""
-      );
 
       formData.append(
         "photo",
         photoBlob,
-        "employee-photo.jpg"
+        `${employeeId}.jpg`
       );
 
       const response = await fetch(
-        `${API_URL}/api/employees`,
+        `${API_BASE}/api/employees`,
         {
           method: "POST",
           body: formData,
         }
       );
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setError(
-          data.message || "Employee registration failed."
+        throw new Error(
+          data?.message ||
+            "Employee registration failed."
         );
-
-        setMessage("");
-        return;
       }
 
-      setRegistered(true);
-
-      setMessage(
-        "Employee Registered Successfully."
+      setSuccess(
+        `Employee profile created successfully. Employee ID: ${
+          data?.employee?.employeeId || employeeId
+        }`
       );
 
+      setName("");
+      setDepartment("");
       setPassword("");
       setConfirmPassword("");
 
-      stopCamera();
+      retakePhoto();
+      disableLocation();
     } catch (err) {
-      console.error(
-        "Employee registration error:",
-        err
-      );
-
-      setMessage("");
-
       setError(
-        "Unable to connect to the employee registration server."
+        err instanceof Error
+          ? err.message
+          : "Employee registration failed."
       );
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
-      <div className="mx-auto max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+    <main className="min-h-screen bg-[#eee9df] text-[#17131c]">
+      <div className="mx-auto max-w-[1500px] px-5 py-6 sm:px-8 lg:px-12">
 
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-900">
-            TALENTRONAUT PVT LTD
-          </h1>
+        {/* TOP BAR */}
+        <header className="flex items-center justify-between border-b border-[#17131c]/15 pb-5">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.35em] text-[#6b6270]">
+              TALENTRONAUT PVT LTD
+            </p>
 
-          <p className="mt-2 text-sm text-slate-600">
-            Register New Employee
-          </p>
-        </div>
-
-        {error && (
-          <div className="mt-5 rounded-lg bg-red-50 p-4 text-sm font-medium text-red-700">
-            {error}
+            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#8a818d]">
+              People Identity Registry
+            </p>
           </div>
-        )}
 
-        {message && (
-          <div className="mt-5 rounded-lg bg-green-50 p-4 text-sm font-medium text-green-700">
-            {message}
+          <div className="flex items-center gap-3">
+            <span className="hidden text-[10px] font-bold uppercase tracking-[0.25em] text-[#6b6270] sm:block">
+              Registry / 01
+            </span>
+
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#17131c] text-xs font-black text-[#e8c96b]">
+              TR
+            </div>
           </div>
-        )}
+        </header>
 
-        <section className="mt-6">
-          <h2 className="text-lg font-semibold text-slate-900">
-            1. Employee Information
-          </h2>
+        {/* HERO */}
+        <section className="grid gap-8 py-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-end lg:py-14">
 
-          <label className="mt-4 block text-sm font-semibold">
-            Employee Name *
-          </label>
+          <div>
+            <div className="mb-7 flex items-center gap-3">
+              <span className="h-2 w-2 rounded-full bg-[#7351d8]" />
 
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Enter Employee Name"
-            disabled={loading || registered}
-            autoComplete="name"
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:bg-slate-100"
-          />
+              <span className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7351d8]">
+                New identity
+              </span>
 
-          <label className="mt-4 block text-sm font-semibold">
-            Employee Department *
-          </label>
+              <span className="h-px w-16 bg-[#7351d8]/40" />
+            </div>
 
-          <input
-            type="text"
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-            placeholder="Enter Employee Department"
-            disabled={loading || registered}
-            autoComplete="organization"
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:bg-slate-100"
-          />
+            <h1 className="max-w-[850px] text-[clamp(4rem,9vw,9.5rem)] font-black leading-[0.78] tracking-[-0.075em]">
+              MAKE
+              <br />
+              YOUR
+              <br />
+              <span className="text-[#7351d8]">MARK.</span>
+            </h1>
 
-          <label className="mt-4 block text-sm font-semibold">
-            Employee Password *
-          </label>
+            <p className="mt-8 max-w-xl text-sm leading-7 text-[#655d69] sm:text-base">
+              Create a verified employee identity for the
+              TALENTRONAUT attendance network. Every profile
+              receives a unique employee identity and can be
+              used for secure Check-In and Check-Out.
+            </p>
+          </div>
 
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter Employee Password"
-            minLength={6}
-            disabled={loading || registered}
-            autoComplete="new-password"
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:bg-slate-100"
-          />
+          {/* IDENTITY CARD */}
+          <div className="relative overflow-hidden rounded-[32px] bg-[#17131c] p-7 text-[#f4efe6] shadow-[0_30px_80px_rgba(23,19,28,0.18)] sm:p-9">
 
-          <label className="mt-4 block text-sm font-semibold">
-            Confirm Employee Password *
-          </label>
+            <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full border border-[#e8c96b]/30" />
+            <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full border border-[#e8c96b]/20" />
 
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) =>
-              setConfirmPassword(e.target.value)
-            }
-            placeholder="Confirm Employee Password"
-            minLength={6}
-            disabled={loading || registered}
-            autoComplete="new-password"
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:bg-slate-100"
-          />
+            <div className="relative">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-[0.32em] text-[#a79fae]">
+                    Employee identity
+                  </p>
+
+                  <p className="mt-2 text-2xl font-black tracking-tight">
+                    TALENTRON
+                  </p>
+                </div>
+
+                <div className="rounded-full border border-[#e8c96b]/40 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.22em] text-[#e8c96b]">
+                  NEW
+                </div>
+              </div>
+
+              <div className="mt-14 grid grid-cols-[90px_1fr] gap-5">
+                <div className="flex h-[90px] items-center justify-center rounded-2xl border border-dashed border-[#aaa1ad]/40 bg-white/[0.03]">
+                  <span className="text-[9px] uppercase tracking-widest text-[#8f8791]">
+                    Photo
+                  </span>
+                </div>
+
+                <div>
+                  <p className="text-[9px] uppercase tracking-[0.25em] text-[#8f8791]">
+                    Profile status
+                  </p>
+
+                  <p className="mt-2 text-lg font-bold">
+                    Awaiting registration
+                  </p>
+
+                  <div className="mt-5 flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#e8c96b]" />
+                    <span className="text-[9px] uppercase tracking-[0.2em] text-[#a79fae]">
+                      Identity verification required
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 border-t border-white/10 pt-5">
+                <div className="flex justify-between text-[9px] uppercase tracking-[0.2em]">
+                  <span className="text-[#77707a]">
+                    Registry
+                  </span>
+                  <span className="text-[#e8c96b]">
+                    TALENTRON / PEOPLE
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
-        <section className="mt-8">
-          <h2 className="text-lg font-semibold text-slate-900">
-            2. Employee Photo *
-          </h2>
+        {/* FORM */}
+        <form
+          onSubmit={handleSubmit}
+          className="grid gap-7 pb-16 lg:grid-cols-[1fr_0.78fr]"
+        >
 
-          <p className="mt-1 text-sm text-slate-500">
-            Employee photo is compulsory.
-          </p>
+          {/* LEFT — IDENTITY */}
+          <section className="rounded-[30px] border border-[#17131c]/10 bg-[#f7f4ed] p-6 sm:p-9">
 
-          {!cameraOpen && !photoCaptured && (
-            <button
-              type="button"
-              onClick={openCamera}
-              disabled={loading || registered}
-              className="mt-4 w-full rounded-lg bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Open Camera
-            </button>
-          )}
+            <div className="mb-9 flex items-end justify-between border-b border-[#17131c]/10 pb-6">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#7351d8]">
+                  01 / Identity
+                </p>
 
-          {cameraOpen && (
-            <div className="mt-4">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full rounded-xl bg-black"
+                <h2 className="mt-2 text-3xl font-black tracking-[-0.04em]">
+                  Who are we registering?
+                </h2>
+              </div>
+
+              <span className="hidden text-4xl font-black text-[#17131c]/10 sm:block">
+                01
+              </span>
+            </div>
+
+            <div className="space-y-7">
+
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.22em] text-[#716873]">
+                  Employee name
+                </label>
+
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter full name"
+                  className="w-full border-b-2 border-[#17131c]/15 bg-transparent px-0 py-4 text-2xl font-bold outline-none transition placeholder:text-[#aaa3aa] focus:border-[#7351d8]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.22em] text-[#716873]">
+                  Department
+                </label>
+
+                <input
+                  value={department}
+                  onChange={(e) =>
+                    setDepartment(e.target.value)
+                  }
+                  placeholder="IT / HR / Finance / Operations"
+                  className="w-full border-b-2 border-[#17131c]/15 bg-transparent px-0 py-4 text-xl font-semibold outline-none transition placeholder:text-[#aaa3aa] focus:border-[#7351d8]"
+                />
+              </div>
+
+              <div className="grid gap-6 sm:grid-cols-2">
+
+                <div>
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.22em] text-[#716873]">
+                    Access password
+                  </label>
+
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) =>
+                      setPassword(e.target.value)
+                    }
+                    placeholder="Minimum 6 characters"
+                    className="w-full border-b-2 border-[#17131c]/15 bg-transparent px-0 py-4 text-lg font-semibold outline-none transition placeholder:text-[#aaa3aa] focus:border-[#7351d8]"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.22em] text-[#716873]">
+                    Confirm password
+                  </label>
+
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) =>
+                      setConfirmPassword(e.target.value)
+                    }
+                    placeholder="Repeat password"
+                    className="w-full border-b-2 border-[#17131c]/15 bg-transparent px-0 py-4 text-lg font-semibold outline-none transition placeholder:text-[#aaa3aa] focus:border-[#7351d8]"
+                  />
+                </div>
+
+              </div>
+
+              <div className="rounded-2xl bg-[#ece7dd] p-5">
+                <div className="flex gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#17131c] text-[#e8c96b]">
+                    +
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.15em]">
+                      Automatic identity assignment
+                    </p>
+
+                    <p className="mt-2 text-xs leading-5 text-[#77707a]">
+                      Employee ID and internal registry email
+                      will be generated automatically after
+                      registration.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </section>
+
+          {/* RIGHT — PHOTO + LOCATION */}
+          <section className="space-y-7">
+
+            <div className="rounded-[30px] bg-[#7351d8] p-5 text-white sm:p-7">
+
+              <div className="mb-6 flex items-end justify-between">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.3em] text-white/60">
+                    02 / Identity capture
+                  </p>
+
+                  <h2 className="mt-2 text-3xl font-black tracking-[-0.04em]">
+                    Show your face.
+                  </h2>
+                </div>
+
+                <span className="text-4xl font-black text-white/20">
+                  02
+                </span>
+              </div>
+
+              <div className="relative aspect-[4/3] overflow-hidden rounded-[24px] bg-[#18131f]">
+
+                {!photoPreview ? (
+                  <>
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="h-full w-full object-cover"
+                    />
+
+                    <div className="pointer-events-none absolute inset-5">
+                      <div className="absolute left-0 top-0 h-8 w-8 border-l-2 border-t-2 border-[#e8c96b]" />
+                      <div className="absolute right-0 top-0 h-8 w-8 border-r-2 border-t-2 border-[#e8c96b]" />
+                      <div className="absolute bottom-0 left-0 h-8 w-8 border-b-2 border-l-2 border-[#e8c96b]" />
+                      <div className="absolute bottom-0 right-0 h-8 w-8 border-b-2 border-r-2 border-[#e8c96b]" />
+                    </div>
+
+                    <div className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-2 text-[8px] font-bold uppercase tracking-[0.2em]">
+                      {cameraReady
+                        ? "Camera live"
+                        : "Connecting"}
+                    </div>
+                  </>
+                ) : (
+                  <img
+                    src={photoPreview}
+                    alt="Employee identity preview"
+                    className="h-full w-full object-cover"
+                  />
+                )}
+
+                {!cameraReady && !photoPreview && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-[#18131f]/80 p-6 text-center">
+                    <div>
+                      <p className="text-sm font-bold">
+                        Camera unavailable
+                      </p>
+
+                      <p className="mt-2 text-xs leading-5 text-white/60">
+                        Allow camera permission and try again.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {cameraError && (
+                <p className="mt-3 text-xs text-[#ffe2cf]">
+                  {cameraError}
+                </p>
+              )}
+
+              <div className="mt-5 flex gap-3">
+
+                {!photoPreview ? (
+                  <button
+                    type="button"
+                    onClick={capturePhoto}
+                    disabled={!cameraReady}
+                    className="flex-1 rounded-2xl bg-[#e8c96b] px-5 py-4 text-xs font-black uppercase tracking-[0.18em] text-[#17131c] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Capture identity
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={retakePhoto}
+                    className="flex-1 rounded-2xl bg-white px-5 py-4 text-xs font-black uppercase tracking-[0.18em] text-[#17131c] transition hover:bg-[#e8c96b]"
+                  >
+                    Retake photo
+                  </button>
+                )}
+
+              </div>
+
+              <p className="mt-4 text-[9px] uppercase tracking-[0.18em] text-white/50">
+                Identity photo required for attendance verification
+              </p>
+
+              <canvas
+                ref={canvasRef}
+                className="hidden"
               />
-
-              <button
-                type="button"
-                onClick={capturePhoto}
-                disabled={registered}
-                className="mt-4 w-full rounded-lg bg-green-600 px-4 py-3 font-semibold text-white disabled:opacity-50"
-              >
-                Capture Photo
-              </button>
-
-              <button
-                type="button"
-                onClick={stopCamera}
-                disabled={registered}
-                className="mt-3 w-full rounded-lg border px-4 py-3 disabled:opacity-50"
-              >
-                Cancel Camera
-              </button>
             </div>
-          )}
 
-          <canvas
-            ref={canvasRef}
-            className="hidden"
-          />
+            {/* LOCATION */}
+            <div className="rounded-[30px] border border-[#17131c]/10 bg-[#f7f4ed] p-6 sm:p-7">
 
-          {photoPreview && (
-            <div className="mt-4">
-              <img
-                src={photoPreview}
-                alt="Employee captured photo"
-                className="mx-auto h-56 w-56 rounded-xl object-cover"
-              />
+              <div className="flex items-start justify-between gap-5">
 
-              <p className="mt-2 text-center font-semibold text-green-600">
-                Photo Captured
-              </p>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#7351d8]">
+                    03 / Optional signal
+                  </p>
 
-              <button
-                type="button"
-                onClick={retakePhoto}
-                disabled={loading || registered}
-                className="mt-3 w-full rounded-lg border px-4 py-3 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Retake Photo
-              </button>
+                  <h3 className="mt-2 text-xl font-black">
+                    Registration location
+                  </h3>
+
+                  <p className="mt-2 max-w-sm text-xs leading-5 text-[#77707a]">
+                    Add the current device location to the
+                    employee profile. This is optional.
+                  </p>
+                </div>
+
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#ece7dd] text-lg">
+                  ◎
+                </div>
+              </div>
+
+              <div className="mt-6">
+
+                {!locationEnabled ? (
+                  <button
+                    type="button"
+                    onClick={enableLocation}
+                    className="w-full rounded-2xl border border-[#17131c]/15 px-5 py-4 text-xs font-black uppercase tracking-[0.18em] transition hover:border-[#7351d8] hover:bg-[#7351d8]/5"
+                  >
+                    Add current location
+                  </button>
+                ) : (
+                  <div className="rounded-2xl bg-[#17131c] p-4 text-white">
+                    <div className="flex items-center justify-between">
+
+                      <div>
+                        <p className="text-[9px] uppercase tracking-[0.2em] text-[#a79fae]">
+                          Location captured
+                        </p>
+
+                        <p className="mt-2 text-xs font-bold text-[#e8c96b]">
+                          {latitude}, {longitude}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={disableLocation}
+                        className="rounded-xl border border-white/15 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.15em] text-white/70 hover:text-white"
+                      >
+                        Remove
+                      </button>
+
+                    </div>
+                  </div>
+                )}
+
+              </div>
             </div>
-          )}
-        </section>
 
-        <section className="mt-8">
-          <h2 className="text-lg font-semibold text-slate-900">
-            3. Mobile Location (Optional)
-          </h2>
+          </section>
 
-          <p className="mt-1 text-sm text-slate-500">
-            Mobile location is optional.
-          </p>
+          {/* SUBMIT */}
+          <div className="lg:col-span-2">
 
-          <button
-            type="button"
-            onClick={getCurrentLocation}
-            disabled={loading || registered}
-            className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Get My Location
-          </button>
-
-          {latitude !== null && longitude !== null && (
-            <div className="mt-4 rounded-lg bg-green-50 p-4 text-sm">
-              <p>Latitude: {latitude}</p>
-              <p>Longitude: {longitude}</p>
-
-              <p className="mt-2 font-semibold text-green-600">
-                Location Captured
-              </p>
-            </div>
-          )}
-
-          {latitude === null &&
-            longitude === null && (
-              <p className="mt-3 text-xs text-slate-500">
-                You can register the employee without
-                providing mobile location.
-              </p>
+            {error && (
+              <div className="mb-5 rounded-2xl border border-red-300 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700">
+                {error}
+              </div>
             )}
-        </section>
 
-        <section className="mt-8">
-          <button
-            type="button"
-            onClick={registerEmployee}
-            disabled={loading || registered}
-            className={
-              "w-full rounded-lg px-4 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-60 " +
-              (registered
-                ? "bg-green-700"
-                : "bg-green-600 hover:bg-green-700")
-            }
-          >
-            {registered
-              ? "REGISTER EMPLOYEE - COMPLETED"
-              : loading
-              ? "REGISTERING EMPLOYEE..."
-              : "REGISTER EMPLOYEE"}
-          </button>
-        </section>
+            {success && (
+              <div className="mb-5 rounded-2xl border border-green-300 bg-green-50 px-5 py-4 text-sm font-semibold text-green-700">
+                {success}
+              </div>
+            )}
 
-        <div className="mt-6 rounded-xl bg-slate-50 p-4">
-          <p className="font-semibold text-slate-900">
-            Registration Requirements
-          </p>
+            <button
+              type="submit"
+              disabled={loading}
+              className="group relative w-full overflow-hidden rounded-[28px] bg-[#17131c] px-7 py-7 text-left text-white transition hover:bg-[#241d2b] disabled:cursor-not-allowed disabled:opacity-60 sm:px-10"
+            >
+              <div className="relative z-10 flex items-center justify-between gap-5">
 
-          <ul className="mt-3 space-y-2 text-sm">
-            <li>
-              {name.trim()
-                ? "Complete"
-                : "Pending"} Employee Name
-            </li>
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-[#a79fae]">
+                    Finalize identity
+                  </p>
 
-            <li>
-              {department.trim()
-                ? "Complete"
-                : "Pending"} Employee Department
-            </li>
+                  <p className="mt-2 text-3xl font-black tracking-[-0.04em] sm:text-4xl">
+                    {loading
+                      ? "Creating profile..."
+                      : "Register Employee"}
+                  </p>
+                </div>
 
-            <li>
-              {password.trim()
-                ? "Complete"
-                : "Pending"} Employee Password
-            </li>
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#e8c96b] text-2xl font-black text-[#17131c] transition group-hover:translate-x-1">
+                  →
+                </div>
 
-            <li>
-              {confirmPassword.trim()
-                ? "Complete"
-                : "Pending"} Confirm Employee Password
-            </li>
+              </div>
 
-            <li>
-              {photoCaptured
-                ? "Complete"
-                : "Pending"} Employee Photo
-            </li>
+              <div className="absolute bottom-0 left-0 h-1 w-full bg-[#e8c96b]" />
+            </button>
 
-            <li>
-              Mobile Location (Optional)
-            </li>
-          </ul>
-        </div>
+            <div className="mt-5 flex flex-col justify-between gap-2 text-[9px] font-bold uppercase tracking-[0.2em] text-[#817983] sm:flex-row">
+              <span>
+                TALENTRONAUT PVT LTD / PEOPLE REGISTRY
+              </span>
 
-        <div className="mt-5 rounded-xl border border-green-100 bg-green-50 p-4 text-xs text-green-800">
-          <p className="font-semibold">
-            Registration Information
-          </p>
+              <span>
+                Secure identity creation
+              </span>
+            </div>
 
-          <p className="mt-2">
-            Employee ID and Email are generated automatically
-            during registration.
-          </p>
+          </div>
 
-          <p className="mt-2">
-            Employee Password is securely stored by the backend.
-          </p>
-
-          <p className="mt-2">
-            Employee photo is compulsory.
-          </p>
-
-          <p className="mt-2">
-            Mobile location is optional.
-          </p>
-        </div>
-
+        </form>
       </div>
     </main>
   );
