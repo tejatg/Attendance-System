@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-const API_URL = "https://attendance-backend-2nky.onrender.com";
-
 type Employee = {
   id: number;
   employeeId: string;
@@ -12,6 +10,7 @@ type Employee = {
   department: string;
   photoUrl?: string | null;
   location?: string | null;
+  createdAt?: string;
 };
 
 type Attendance = {
@@ -23,531 +22,1248 @@ type Attendance = {
   status?: string;
   latitude?: number | null;
   longitude?: number | null;
+  employee?: {
+    employeeId?: string;
+    name?: string;
+    email?: string;
+    department?: string;
+    photoUrl?: string | null;
+  };
 };
 
-function getToday() {
-  return new Date().toISOString().split("T")[0];
-}
+const API_BASE =
+  "https://attendance-backend-2nky.onrender.com";
 
-function getDateOnly(value: string) {
-  return new Date(value).toISOString().split("T")[0];
-}
+function formatTime(value?: string | null) {
+  if (!value) return "--:--";
 
-function formatDateTime(value?: string | null) {
-  if (!value) {
-    return "-";
-  }
-
-  return new Date(value).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
+  return new Date(value).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
-export default function AdminDashboardPage() {
-  const today = getToday();
+function formatDate(value?: string | null) {
+  if (!value) return "—";
 
+  return new Date(value).toLocaleDateString([], {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function getDateKey(value: string) {
+  const date = new Date(value);
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getToday() {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+export default function AdminPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
 
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
-
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    loadDashboard();
-  }, []);
+  const [fromDate, setFromDate] = useState(getToday());
+  const [toDate, setToDate] = useState(getToday());
 
-  async function loadDashboard() {
+  const [search, setSearch] = useState("");
+  const [department, setDepartment] = useState("ALL");
+
+  const [activeView, setActiveView] = useState<
+    "overview" | "attendance" | "employees"
+  >("overview");
+
+  const [selectedEmployee, setSelectedEmployee] =
+    useState<Employee | null>(null);
+
+  async function loadData(showFullLoader = false) {
     try {
-      setLoading(true);
+      if (showFullLoader) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
+
       setError("");
 
-      const [employeesResponse, attendanceResponse] =
+      const [employeeResponse, attendanceResponse] =
         await Promise.all([
-          fetch(`${API_URL}/api/employees`),
-          fetch(`${API_URL}/api/attendance`),
+          fetch(`${API_BASE}/api/employees`, {
+            cache: "no-store",
+          }),
+          fetch(`${API_BASE}/api/attendance`, {
+            cache: "no-store",
+          }),
         ]);
 
-      if (!employeesResponse.ok) {
-        throw new Error("Failed to load employees.");
+      if (!employeeResponse.ok) {
+        throw new Error("Unable to load employee data.");
       }
 
       if (!attendanceResponse.ok) {
-        throw new Error("Failed to load attendance.");
+        throw new Error("Unable to load attendance data.");
       }
 
-      const employeesData = await employeesResponse.json();
+      const employeeData = await employeeResponse.json();
       const attendanceData = await attendanceResponse.json();
 
-      setEmployees(employeesData.employees || []);
-      setAttendance(attendanceData.attendance || []);
-    } catch (error) {
-      console.error("Dashboard error:", error);
-      setError("Unable to load dashboard data.");
+      const employeeList =
+        Array.isArray(employeeData)
+          ? employeeData
+          : Array.isArray(employeeData?.employees)
+            ? employeeData.employees
+            : [];
+
+      const attendanceList =
+        Array.isArray(attendanceData)
+          ? attendanceData
+          : Array.isArray(attendanceData?.attendance)
+            ? attendanceData.attendance
+            : [];
+
+      setEmployees(employeeList);
+      setAttendance(attendanceList);
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load dashboard data."
+      );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }
 
+  useEffect(() => {
+    loadData(true);
+  }, []);
+
+  const departments = useMemo(() => {
+    const values = employees
+      .map((employee) => employee.department)
+      .filter(Boolean);
+
+    return ["ALL", ...Array.from(new Set(values))];
+  }, [employees]);
+
   const filteredAttendance = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
     return attendance.filter((record) => {
-      const recordDate = getDateOnly(record.date);
+      const recordDate = getDateKey(record.date);
+
+      const withinDateRange =
+        recordDate >= fromDate && recordDate <= toDate;
+
+      const employeeName =
+        record.employee?.name?.toLowerCase() || "";
+
+      const employeeId =
+        record.employee?.employeeId?.toLowerCase() ||
+        record.employeeId?.toLowerCase() ||
+        "";
+
+      const employeeDepartment =
+        record.employee?.department?.toLowerCase() || "";
+
+      const matchesSearch =
+        !normalizedSearch ||
+        employeeName.includes(normalizedSearch) ||
+        employeeId.includes(normalizedSearch) ||
+        employeeDepartment.includes(normalizedSearch);
+
+      const matchesDepartment =
+        department === "ALL" ||
+        employeeDepartment === department.toLowerCase();
 
       return (
-        recordDate >= startDate &&
-        recordDate <= endDate
+        withinDateRange &&
+        matchesSearch &&
+        matchesDepartment
       );
     });
-  }, [attendance, startDate, endDate]);
+  }, [
+    attendance,
+    fromDate,
+    toDate,
+    search,
+    department,
+  ]);
 
-  const presentEmployeeIds = useMemo(() => {
-    return new Set(
-      filteredAttendance.map(
-        (record) => record.employeeId
-      )
+  const todayAttendance = useMemo(() => {
+    const today = getToday();
+
+    return attendance.filter(
+      (record) => getDateKey(record.date) === today
     );
-  }, [filteredAttendance]);
+  }, [attendance]);
 
-  const totalEmployees = employees.length;
+  const checkedInToday = todayAttendance.filter(
+    (record) => record.checkIn
+  ).length;
 
-  const presentCount = presentEmployeeIds.size;
+  const checkedOutToday = todayAttendance.filter(
+    (record) => record.checkOut
+  ).length;
 
-  const absentCount = Math.max(
-    totalEmployees - presentCount,
+  const currentlyWorking = todayAttendance.filter(
+    (record) => record.checkIn && !record.checkOut
+  ).length;
+
+  const absentToday = Math.max(
+    employees.length - new Set(
+      todayAttendance
+        .filter((record) => record.checkIn)
+        .map((record) => record.employeeId)
+    ).size,
     0
   );
 
-  const checkedInCount = filteredAttendance.filter(
-    (record) =>
-      record.checkIn && !record.checkOut
-  ).length;
+  const filteredEmployees = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
 
-  const checkedOutCount = filteredAttendance.filter(
-    (record) =>
-      record.checkIn && record.checkOut
-  ).length;
+    return employees.filter((employee) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        employee.name.toLowerCase().includes(normalizedSearch) ||
+        employee.employeeId.toLowerCase().includes(normalizedSearch) ||
+        employee.department.toLowerCase().includes(normalizedSearch);
 
-  function getEmployee(employeeId: string) {
-    return employees.find(
-      (employee) =>
-        employee.employeeId === employeeId
+      const matchesDepartment =
+        department === "ALL" ||
+        employee.department.toLowerCase() ===
+          department.toLowerCase();
+
+      return matchesSearch && matchesDepartment;
+    });
+  }, [employees, search, department]);
+
+  const departmentStats = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        total: number;
+        present: number;
+        working: number;
+      }
+    >();
+
+    employees.forEach((employee) => {
+      const existing = map.get(employee.department) || {
+        total: 0,
+        present: 0,
+        working: 0,
+      };
+
+      existing.total += 1;
+
+      map.set(employee.department, existing);
+    });
+
+    todayAttendance.forEach((record) => {
+      const dept =
+        record.employee?.department || "Unknown";
+
+      const existing = map.get(dept) || {
+        total: 0,
+        present: 0,
+        working: 0,
+      };
+
+      if (record.checkIn) {
+        existing.present += 1;
+      }
+
+      if (record.checkIn && !record.checkOut) {
+        existing.working += 1;
+      }
+
+      map.set(dept, existing);
+    });
+
+    return Array.from(map.entries()).map(
+      ([name, values]) => ({
+        name,
+        ...values,
+      })
     );
+  }, [employees, todayAttendance]);
+
+  function logout() {
+    sessionStorage.removeItem("adminAuthenticated");
+    window.location.href = "/admin-login";
   }
 
-  function getEmployeeStatus(employeeId: string) {
-    const records = filteredAttendance.filter(
-      (record) =>
-        record.employeeId === employeeId
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-[#07111f] text-white">
+        <div className="mx-auto flex min-h-screen max-w-[1500px] items-center justify-center px-6">
+          <div className="text-center">
+            <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border border-[#72d6ff]/20 border-t-[#72d6ff]" />
+
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#72d6ff]">
+              Initializing Control Atlas
+            </p>
+
+            <p className="mt-3 text-xs text-white/30">
+              Connecting to workforce data layer...
+            </p>
+          </div>
+        </div>
+      </main>
     );
-
-    if (records.length === 0) {
-      return "Absent";
-    }
-
-    const checkedIn = records.some(
-      (record) =>
-        record.checkIn && !record.checkOut
-    );
-
-    if (checkedIn) {
-      return "Checked In";
-    }
-
-    const checkedOut = records.some(
-      (record) =>
-        record.checkIn && record.checkOut
-    );
-
-    if (checkedOut) {
-      return "Checked Out";
-    }
-
-    return "Present";
-  }
-
-  function getStatusClass(status: string) {
-    if (status === "Absent") {
-      return "bg-red-100 text-red-700";
-    }
-
-    if (status === "Checked In") {
-      return "bg-yellow-100 text-yellow-700";
-    }
-
-    if (status === "Checked Out") {
-      return "bg-green-100 text-green-700";
-    }
-
-    return "bg-blue-100 text-blue-700";
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-8 sm:px-6">
-      <div className="mx-auto w-full max-w-7xl">
+    <main className="min-h-screen overflow-x-hidden bg-[#07111f] text-[#eef7ff]">
 
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* ATMOSPHERE */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+
+        <div className="absolute left-[-180px] top-[-180px] h-[520px] w-[520px] rounded-full border border-[#72d6ff]/10" />
+
+        <div className="absolute left-[-110px] top-[-110px] h-[380px] w-[380px] rounded-full border border-[#72d6ff]/10" />
+
+        <div className="absolute right-[-200px] top-[35%] h-[600px] w-[600px] rounded-full border border-white/[0.035]" />
+
+        <div className="absolute inset-x-0 top-[112px] h-px bg-white/[0.055]" />
+
+      </div>
+
+      <div className="relative mx-auto max-w-[1500px] px-5 py-5 sm:px-8 lg:px-10">
+
+        {/* TOP BAR */}
+        <header className="flex flex-col gap-5 border-b border-white/10 pb-5 lg:flex-row lg:items-center lg:justify-between">
+
+          <div className="flex items-center gap-5">
+
+            <div className="flex h-12 w-12 items-center justify-center border border-[#72d6ff]/30 bg-[#0b1b2c]">
+              <span className="text-sm font-black text-[#72d6ff]">
+                TA
+              </span>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.35em]">
+                TALENTRONAUT PVT LTD
+              </p>
+
+              <p className="mt-1 text-[8px] uppercase tracking-[0.28em] text-white/30">
+                Workforce intelligence / command layer
+              </p>
+            </div>
+
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+
+            <div className="flex items-center gap-2 border border-white/10 px-4 py-3">
+
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#79f2a4]" />
+
+              <span className="text-[8px] font-black uppercase tracking-[0.22em] text-white/50">
+                Data link online
+              </span>
+
+            </div>
+
+            <button
+              type="button"
+              onClick={() => loadData(false)}
+              className="border border-white/10 px-4 py-3 text-[8px] font-black uppercase tracking-[0.22em] transition hover:border-[#72d6ff]/40 hover:text-[#72d6ff]"
+            >
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </button>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="border border-[#ff6577]/20 px-4 py-3 text-[8px] font-black uppercase tracking-[0.22em] text-[#ff8b98] transition hover:bg-[#ff6577]/10"
+            >
+              Exit
+            </button>
+
+          </div>
+        </header>
+
+        {/* HERO */}
+        <section className="grid gap-8 py-10 lg:grid-cols-[1.3fr_0.7fr] lg:items-end">
+
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              ADMIN DASHBOARD
+
+            <div className="mb-5 flex items-center gap-3">
+
+              <span className="h-px w-10 bg-[#72d6ff]" />
+
+              <span className="text-[8px] font-black uppercase tracking-[0.35em] text-[#72d6ff]">
+                Control Atlas / Live
+              </span>
+
+            </div>
+
+            <h1 className="max-w-5xl text-[clamp(3.4rem,8vw,8.5rem)] font-black leading-[0.78] tracking-[-0.08em]">
+              KNOW
+              <br />
+              YOUR
+              <br />
+              <span className="text-white/15">
+                WORKFORCE.
+              </span>
             </h1>
 
-            <p className="mt-2 text-sm text-gray-500">
-              Employee and attendance management
+          </div>
+
+          <div className="border-l border-[#72d6ff]/30 pl-6">
+
+            <p className="text-[9px] font-black uppercase tracking-[0.28em] text-white/25">
+              Operational state
             </p>
+
+            <p className="mt-3 text-2xl font-black">
+              {currentlyWorking}
+              <span className="ml-2 text-sm font-medium text-white/30">
+                active now
+              </span>
+            </p>
+
+            <p className="mt-3 max-w-sm text-xs leading-6 text-white/35">
+              Real-time attendance visibility across registered
+              workforce identities.
+            </p>
+
           </div>
 
-          <button
-            type="button"
-            onClick={loadDashboard}
-            className="rounded-xl bg-black px-5 py-3 text-sm font-bold text-white hover:opacity-90"
-          >
-            REFRESH DATA
-          </button>
-        </div>
-
-        {/* Date Range */}
-        <section className="mb-8 rounded-2xl border border-gray-200 bg-white p-5">
-          <h2 className="mb-4 text-lg font-bold text-gray-900">
-            Date Range Select
-          </h2>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                Start Date
-              </label>
-
-              <input
-                type="date"
-                value={startDate}
-                onChange={(event) =>
-                  setStartDate(event.target.value)
-                }
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                End Date
-              </label>
-
-              <input
-                type="date"
-                value={endDate}
-                min={startDate}
-                onChange={(event) =>
-                  setEndDate(event.target.value)
-                }
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black"
-              />
-            </div>
-          </div>
         </section>
 
-        {/* Error */}
+        {/* ERROR */}
         {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {error}
+          <div className="mb-6 border border-[#ff6577]/30 bg-[#ff6577]/5 px-5 py-4">
+
+            <p className="text-xs font-semibold text-[#ff9aa6]">
+              {error}
+            </p>
+
           </div>
         )}
 
-        {/* Statistics */}
-        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {/* METRIC STRIP */}
+        <section className="grid gap-px border border-white/10 bg-white/10 sm:grid-cols-2 xl:grid-cols-5">
 
-          {/* Total Employees */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-6">
-            <p className="text-sm font-semibold text-gray-500">
-              Total Employees
+          <div className="bg-[#0a1727] p-6">
+
+            <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/25">
+              Workforce
             </p>
 
-            <p className="mt-3 text-4xl font-bold text-gray-900">
-              {totalEmployees}
+            <p className="mt-5 text-4xl font-black">
+              {employees.length}
             </p>
+
+            <p className="mt-2 text-[9px] uppercase tracking-[0.15em] text-white/25">
+              Registered identities
+            </p>
+
           </div>
 
-          {/* Present */}
-          <div className="rounded-2xl border border-green-200 bg-green-50 p-6">
-            <p className="text-sm font-semibold text-green-700">
+          <div className="bg-[#0a1727] p-6">
+
+            <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/25">
               Present
             </p>
 
-            <p className="mt-3 text-4xl font-bold text-green-800">
-              {presentCount}
+            <p className="mt-5 text-4xl font-black text-[#72d6ff]">
+              {checkedInToday}
             </p>
+
+            <p className="mt-2 text-[9px] uppercase tracking-[0.15em] text-white/25">
+              Today
+            </p>
+
           </div>
 
-          {/* Absent */}
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
-            <p className="text-sm font-semibold text-red-700">
-              Absent
+          <div className="bg-[#0a1727] p-6">
+
+            <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/25">
+              Active
             </p>
 
-            <p className="mt-3 text-4xl font-bold text-red-800">
-              {absentCount}
+            <p className="mt-5 text-4xl font-black text-[#79f2a4]">
+              {currentlyWorking}
             </p>
+
+            <p className="mt-2 text-[9px] uppercase tracking-[0.15em] text-white/25">
+              Currently working
+            </p>
+
           </div>
 
-          {/* Checked In */}
-          <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-6">
-            <p className="text-sm font-semibold text-yellow-700">
-              Checked In
+          <div className="bg-[#0a1727] p-6">
+
+            <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/25">
+              Closed
             </p>
 
-            <p className="mt-3 text-4xl font-bold text-yellow-800">
-              {checkedInCount}
+            <p className="mt-5 text-4xl font-black">
+              {checkedOutToday}
             </p>
+
+            <p className="mt-2 text-[9px] uppercase tracking-[0.15em] text-white/25">
+              Completed shifts
+            </p>
+
           </div>
 
-          {/* Checked Out */}
-          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6">
-            <p className="text-sm font-semibold text-blue-700">
-              Checked Out
+          <div className="bg-[#0a1727] p-6">
+
+            <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/25">
+              Unmarked
             </p>
 
-            <p className="mt-3 text-4xl font-bold text-blue-800">
-              {checkedOutCount}
+            <p className="mt-5 text-4xl font-black text-[#ffca70]">
+              {absentToday}
             </p>
+
+            <p className="mt-2 text-[9px] uppercase tracking-[0.15em] text-white/25">
+              No check-in today
+            </p>
+
           </div>
 
         </section>
 
-        {/* Employee List */}
-        <section className="mb-8 rounded-2xl border border-gray-200 bg-white">
+        {/* NAVIGATION */}
+        <section className="mt-8 flex flex-wrap gap-2 border-b border-white/10 pb-4">
 
-          <div className="border-b border-gray-200 px-5 py-5">
-            <h2 className="text-xl font-bold text-gray-900">
-              Employee List
-            </h2>
+          {[
+            ["overview", "Overview"],
+            ["attendance", "Attendance Ledger"],
+            ["employees", "Employee Registry"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() =>
+                setActiveView(
+                  value as
+                    | "overview"
+                    | "attendance"
+                    | "employees"
+                )
+              }
+              className={`px-5 py-3 text-[8px] font-black uppercase tracking-[0.22em] transition ${
+                activeView === value
+                  ? "bg-[#72d6ff] text-[#07111f]"
+                  : "border border-white/10 text-white/40 hover:border-white/25 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+
+        </section>
+
+        {/* FILTER BAR */}
+        <section className="mt-6 grid gap-3 border border-white/10 bg-[#0a1727] p-4 md:grid-cols-2 lg:grid-cols-5">
+
+          <div className="lg:col-span-2">
+
+            <label className="mb-2 block text-[8px] font-black uppercase tracking-[0.2em] text-white/25">
+              Search
+            </label>
+
+            <input
+              type="text"
+              value={search}
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
+              placeholder="Name / employee ID / department"
+              className="w-full border border-white/10 bg-[#07111f] px-4 py-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-[#72d6ff]/50"
+            />
+
           </div>
 
-          {loading ? (
-            <div className="p-8 text-center text-gray-500">
-              Loading employees...
-            </div>
-          ) : employees.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              No employees found.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[750px]">
+          <div>
 
-                <thead>
-                  <tr className="border-b bg-gray-50 text-left text-sm text-gray-600">
+            <label className="mb-2 block text-[8px] font-black uppercase tracking-[0.2em] text-white/25">
+              Department
+            </label>
 
-                    <th className="px-5 py-4 font-semibold">
-                      Photo
-                    </th>
+            <select
+              value={department}
+              onChange={(event) =>
+                setDepartment(event.target.value)
+              }
+              className="w-full border border-white/10 bg-[#07111f] px-4 py-3 text-xs text-white outline-none focus:border-[#72d6ff]/50"
+            >
+              {departments.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
 
-                    <th className="px-5 py-4 font-semibold">
-                      Name
-                    </th>
+          </div>
 
-                    <th className="px-5 py-4 font-semibold">
-                      Department
-                    </th>
+          <div>
 
-                    <th className="px-5 py-4 font-semibold">
-                      Status
-                    </th>
+            <label className="mb-2 block text-[8px] font-black uppercase tracking-[0.2em] text-white/25">
+              From
+            </label>
 
-                    <th className="px-5 py-4 font-semibold">
-                      Employee ID
-                    </th>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(event) =>
+                setFromDate(event.target.value)
+              }
+              className="w-full border border-white/10 bg-[#07111f] px-4 py-3 text-xs text-white outline-none focus:border-[#72d6ff]/50"
+            />
 
-                  </tr>
-                </thead>
+          </div>
 
-                <tbody>
-                  {employees.map((employee) => {
-                    const status =
-                      getEmployeeStatus(
-                        employee.employeeId
-                      );
+          <div>
 
-                    return (
-                      <tr
-                        key={employee.id}
-                        className="border-b last:border-b-0"
-                      >
+            <label className="mb-2 block text-[8px] font-black uppercase tracking-[0.2em] text-white/25">
+              To
+            </label>
 
-                        <td className="px-5 py-4">
-                          {employee.photoUrl ? (
-                            <img
-                              src={employee.photoUrl}
-                              alt={employee.name}
-                              className="h-12 w-12 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-200 text-sm font-bold text-gray-600">
-                              {employee.name
-                                .charAt(0)
-                                .toUpperCase()}
+            <input
+              type="date"
+              value={toDate}
+              onChange={(event) =>
+                setToDate(event.target.value)
+              }
+              className="w-full border border-white/10 bg-[#07111f] px-4 py-3 text-xs text-white outline-none focus:border-[#72d6ff]/50"
+            />
+
+          </div>
+
+        </section>
+
+        {/* OVERVIEW */}
+        {activeView === "overview" && (
+          <section className="mt-8 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+
+            {/* DEPARTMENT RADAR */}
+            <div className="border border-white/10 bg-[#0a1727]">
+
+              <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+
+                <div>
+                  <p className="text-[8px] font-black uppercase tracking-[0.25em] text-[#72d6ff]">
+                    Workforce map
+                  </p>
+
+                  <h2 className="mt-2 text-lg font-black">
+                    Department activity
+                  </h2>
+                </div>
+
+                <span className="text-[9px] text-white/25">
+                  TODAY
+                </span>
+
+              </div>
+
+              <div className="p-6">
+
+                {departmentStats.length === 0 ? (
+                  <p className="py-12 text-center text-xs text-white/30">
+                    No department data available.
+                  </p>
+                ) : (
+                  <div className="space-y-5">
+
+                    {departmentStats.map((item) => {
+
+                      const percentage =
+                        item.total > 0
+                          ? Math.round(
+                              (item.present /
+                                item.total) *
+                                100
+                            )
+                          : 0;
+
+                      return (
+                        <div key={item.name}>
+
+                          <div className="mb-2 flex items-end justify-between gap-4">
+
+                            <div>
+                              <p className="text-xs font-bold">
+                                {item.name}
+                              </p>
+
+                              <p className="mt-1 text-[8px] uppercase tracking-[0.16em] text-white/25">
+                                {item.total} registered
+                              </p>
                             </div>
-                          )}
-                        </td>
 
-                        <td className="px-5 py-4 font-semibold text-gray-900">
-                          {employee.name}
-                        </td>
+                            <div className="text-right">
+                              <span className="text-sm font-black text-[#72d6ff]">
+                                {percentage}%
+                              </span>
 
-                        <td className="px-5 py-4 text-gray-600">
-                          {employee.department}
-                        </td>
+                              <p className="text-[8px] text-white/25">
+                                present
+                              </p>
+                            </div>
 
-                        <td className="px-5 py-4">
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-bold ${getStatusClass(
-                              status
-                            )}`}
-                          >
-                            {status}
-                          </span>
-                        </td>
+                          </div>
 
-                        <td className="px-5 py-4 text-gray-600">
-                          {employee.employeeId}
-                        </td>
+                          <div className="h-2 overflow-hidden bg-white/5">
 
-                      </tr>
-                    );
-                  })}
-                </tbody>
+                            <div
+                              className="h-full bg-[#72d6ff] transition-all"
+                              style={{
+                                width: `${Math.min(
+                                  percentage,
+                                  100
+                                )}%`,
+                              }}
+                            />
 
-              </table>
+                          </div>
+
+                        </div>
+                      );
+                    })}
+
+                  </div>
+                )}
+
+              </div>
+
             </div>
-          )}
 
-        </section>
+            {/* QUICK INTELLIGENCE */}
+            <div className="border border-white/10 bg-[#0a1727]">
 
-        {/* Attendance Records */}
-        <section className="rounded-2xl border border-gray-200 bg-white">
+              <div className="border-b border-white/10 px-6 py-5">
 
-          <div className="border-b border-gray-200 px-5 py-5">
-            <h2 className="text-xl font-bold text-gray-900">
-              Attendance Records
-            </h2>
+                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-[#72d6ff]">
+                  Signal board
+                </p>
 
-            <p className="mt-1 text-sm text-gray-500">
-              {startDate} to {endDate}
-            </p>
-          </div>
+                <h2 className="mt-2 text-lg font-black">
+                  Operational intelligence
+                </h2>
 
-          {loading ? (
-            <div className="p-8 text-center text-gray-500">
-              Loading attendance...
+              </div>
+
+              <div className="divide-y divide-white/10">
+
+                <div className="flex items-center justify-between px-6 py-6">
+
+                  <div>
+                    <p className="text-xs font-bold">
+                      Check-in coverage
+                    </p>
+
+                    <p className="mt-1 text-[8px] uppercase tracking-[0.15em] text-white/25">
+                      Workforce presence
+                    </p>
+                  </div>
+
+                  <p className="text-2xl font-black text-[#72d6ff]">
+                    {employees.length
+                      ? Math.round(
+                          (checkedInToday /
+                            employees.length) *
+                            100
+                        )
+                      : 0}
+                    %
+                  </p>
+
+                </div>
+
+                <div className="flex items-center justify-between px-6 py-6">
+
+                  <div>
+                    <p className="text-xs font-bold">
+                      Shift completion
+                    </p>
+
+                    <p className="mt-1 text-[8px] uppercase tracking-[0.15em] text-white/25">
+                      Closed workdays
+                    </p>
+                  </div>
+
+                  <p className="text-2xl font-black text-[#79f2a4]">
+                    {checkedInToday
+                      ? Math.round(
+                          (checkedOutToday /
+                            checkedInToday) *
+                            100
+                        )
+                      : 0}
+                    %
+                  </p>
+
+                </div>
+
+                <div className="flex items-center justify-between px-6 py-6">
+
+                  <div>
+                    <p className="text-xs font-bold">
+                      Active workforce
+                    </p>
+
+                    <p className="mt-1 text-[8px] uppercase tracking-[0.15em] text-white/25">
+                      Open attendance sessions
+                    </p>
+                  </div>
+
+                  <p className="text-2xl font-black text-[#ffca70]">
+                    {currentlyWorking}
+                  </p>
+
+                </div>
+
+              </div>
+
             </div>
-          ) : filteredAttendance.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              No attendance records found for the selected date range.
+
+          </section>
+        )}
+
+        {/* ATTENDANCE */}
+        {activeView === "attendance" && (
+          <section className="mt-8 border border-white/10 bg-[#0a1727]">
+
+            <div className="flex flex-col gap-4 border-b border-white/10 px-6 py-6 sm:flex-row sm:items-end sm:justify-between">
+
+              <div>
+                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-[#72d6ff]">
+                  Event stream
+                </p>
+
+                <h2 className="mt-2 text-xl font-black">
+                  Attendance ledger
+                </h2>
+              </div>
+
+              <p className="text-[9px] uppercase tracking-[0.15em] text-white/25">
+                {filteredAttendance.length} records matched
+              </p>
+
             </div>
-          ) : (
+
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
+
+              <table className="w-full min-w-[900px] text-left">
 
                 <thead>
-                  <tr className="border-b bg-gray-50 text-left text-sm text-gray-600">
+                  <tr className="border-b border-white/10 text-[8px] font-black uppercase tracking-[0.2em] text-white/25">
 
-                    <th className="px-5 py-4 font-semibold">
+                    <th className="px-6 py-4">
                       Employee
                     </th>
 
-                    <th className="px-5 py-4 font-semibold">
+                    <th className="px-6 py-4">
                       Department
                     </th>
 
-                    <th className="px-5 py-4 font-semibold">
-                      Check-In
-                    </th>
-
-                    <th className="px-5 py-4 font-semibold">
-                      Check-Out
-                    </th>
-
-                    <th className="px-5 py-4 font-semibold">
+                    <th className="px-6 py-4">
                       Date
                     </th>
 
-                    <th className="px-5 py-4 font-semibold">
+                    <th className="px-6 py-4">
+                      Check In
+                    </th>
+
+                    <th className="px-6 py-4">
+                      Check Out
+                    </th>
+
+                    <th className="px-6 py-4">
                       Status
                     </th>
 
                   </tr>
                 </thead>
 
-                <tbody>
-                  {filteredAttendance.map((record) => {
-                    const employee =
-                      getEmployee(
-                        record.employeeId
-                      );
+                <tbody className="divide-y divide-white/5">
 
-                    const status =
-                      record.checkIn &&
-                      record.checkOut
-                        ? "Checked Out"
-                        : record.checkIn
-                        ? "Checked In"
-                        : "Absent";
+                  {filteredAttendance.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-6 py-16 text-center text-xs text-white/30"
+                      >
+                        No attendance records match the
+                        selected filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredAttendance.map((record) => (
 
-                    return (
                       <tr
                         key={record.id}
-                        className="border-b last:border-b-0"
+                        className="transition hover:bg-white/[0.025]"
                       >
 
-                        <td className="px-5 py-4 font-semibold text-gray-900">
-                          {employee?.name ||
-                            "Unknown Employee"}
+                        <td className="px-6 py-5">
+
+                          <div className="flex items-center gap-3">
+
+                            {record.employee?.photoUrl ? (
+                              <img
+                                src={record.employee.photoUrl}
+                                alt={record.employee?.name || "Employee"}
+                                className="h-9 w-9 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#12253a] text-[9px] font-black text-[#72d6ff]">
+                                {(record.employee?.name || "E")
+                                  .charAt(0)
+                                  .toUpperCase()}
+                              </div>
+                            )}
+
+                            <div>
+                              <p className="text-xs font-bold">
+                                {record.employee?.name ||
+                                  "Unknown"}
+                              </p>
+
+                              <p className="mt-1 text-[8px] text-white/25">
+                                {record.employee?.employeeId ||
+                                  record.employeeId}
+                              </p>
+                            </div>
+
+                          </div>
+
                         </td>
 
-                        <td className="px-5 py-4 text-gray-600">
-                          {employee?.department || "-"}
+                        <td className="px-6 py-5 text-xs text-white/50">
+                          {record.employee?.department || "—"}
                         </td>
 
-                        <td className="px-5 py-4 text-gray-600">
-                          {formatDateTime(
-                            record.checkIn
-                          )}
+                        <td className="px-6 py-5 text-xs text-white/50">
+                          {formatDate(record.date)}
                         </td>
 
-                        <td className="px-5 py-4 text-gray-600">
-                          {formatDateTime(
-                            record.checkOut
-                          )}
+                        <td className="px-6 py-5 text-xs font-bold text-[#72d6ff]">
+                          {formatTime(record.checkIn)}
                         </td>
 
-                        <td className="px-5 py-4 text-gray-600">
-                          {getDateOnly(
-                            record.date
-                          )}
+                        <td className="px-6 py-5 text-xs font-bold text-[#79f2a4]">
+                          {formatTime(record.checkOut)}
                         </td>
 
-                        <td className="px-5 py-4">
+                        <td className="px-6 py-5">
+
                           <span
-                            className={`rounded-full px-3 py-1 text-xs font-bold ${getStatusClass(
-                              status
-                            )}`}
+                            className={`inline-flex px-3 py-1 text-[8px] font-black uppercase tracking-[0.16em] ${
+                              record.checkIn &&
+                              !record.checkOut
+                                ? "bg-[#ffca70]/10 text-[#ffca70]"
+                                : "bg-[#79f2a4]/10 text-[#79f2a4]"
+                            }`}
                           >
-                            {status}
+                            {record.checkIn &&
+                            !record.checkOut
+                              ? "Active"
+                              : record.status ||
+                                "Present"}
                           </span>
+
                         </td>
 
                       </tr>
-                    );
-                  })}
+
+                    ))
+                  )}
+
                 </tbody>
 
               </table>
-            </div>
-          )}
 
-        </section>
+            </div>
+
+          </section>
+        )}
+
+        {/* EMPLOYEES */}
+        {activeView === "employees" && (
+          <section className="mt-8">
+
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+
+              <div>
+                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-[#72d6ff]">
+                  Identity registry
+                </p>
+
+                <h2 className="mt-2 text-xl font-black">
+                  Employee registry
+                </h2>
+              </div>
+
+              <p className="text-[9px] uppercase tracking-[0.15em] text-white/25">
+                {filteredEmployees.length} identities
+              </p>
+
+            </div>
+
+            <div className="grid gap-px border border-white/10 bg-white/10 md:grid-cols-2 xl:grid-cols-3">
+
+              {filteredEmployees.length === 0 ? (
+                <div className="bg-[#0a1727] px-6 py-16 text-center text-xs text-white/30 md:col-span-2 xl:col-span-3">
+                  No employee identities match the selected
+                  filters.
+                </div>
+              ) : (
+                filteredEmployees.map((employee) => (
+
+                  <button
+                    key={employee.id}
+                    type="button"
+                    onClick={() =>
+                      setSelectedEmployee(employee)
+                    }
+                    className="group bg-[#0a1727] p-6 text-left transition hover:bg-[#0d1d30]"
+                  >
+
+                    <div className="flex items-start justify-between gap-5">
+
+                      <div className="flex items-center gap-4">
+
+                        {employee.photoUrl ? (
+                          <img
+                            src={employee.photoUrl}
+                            alt={employee.name}
+                            className="h-14 w-14 rounded-full object-cover ring-1 ring-white/10"
+                          />
+                        ) : (
+                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#12253a] text-lg font-black text-[#72d6ff]">
+                            {employee.name
+                              .charAt(0)
+                              .toUpperCase()}
+                          </div>
+                        )}
+
+                        <div>
+                          <p className="text-sm font-black">
+                            {employee.name}
+                          </p>
+
+                          <p className="mt-1 text-[8px] uppercase tracking-[0.16em] text-[#72d6ff]">
+                            {employee.employeeId}
+                          </p>
+                        </div>
+
+                      </div>
+
+                      <span className="text-xl text-white/15 transition group-hover:text-[#72d6ff]">
+                        ↗
+                      </span>
+
+                    </div>
+
+                    <div className="mt-6 border-t border-white/10 pt-5">
+
+                      <div className="flex items-center justify-between">
+
+                        <span className="text-[8px] uppercase tracking-[0.16em] text-white/25">
+                          Department
+                        </span>
+
+                        <span className="text-xs font-bold">
+                          {employee.department}
+                        </span>
+
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between">
+
+                        <span className="text-[8px] uppercase tracking-[0.16em] text-white/25">
+                          Email
+                        </span>
+
+                        <span className="max-w-[180px] truncate text-[9px] text-white/45">
+                          {employee.email}
+                        </span>
+
+                      </div>
+
+                    </div>
+
+                  </button>
+
+                ))
+              )}
+
+            </div>
+
+          </section>
+        )}
+
+        {/* SELECTED EMPLOYEE DRAWER */}
+        {selectedEmployee && (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center"
+            onClick={() => setSelectedEmployee(null)}
+          >
+
+            <div
+              className="w-full max-w-xl border border-white/10 bg-[#0a1727]"
+              onClick={(event) => event.stopPropagation()}
+            >
+
+              <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+
+                <div>
+                  <p className="text-[8px] font-black uppercase tracking-[0.25em] text-[#72d6ff]">
+                    Identity profile
+                  </p>
+
+                  <h3 className="mt-2 text-lg font-black">
+                    {selectedEmployee.name}
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedEmployee(null)
+                  }
+                  className="h-9 w-9 border border-white/10 text-sm text-white/40 hover:text-white"
+                >
+                  ×
+                </button>
+
+              </div>
+
+              <div className="p-6">
+
+                <div className="flex items-center gap-5">
+
+                  {selectedEmployee.photoUrl ? (
+                    <img
+                      src={selectedEmployee.photoUrl}
+                      alt={selectedEmployee.name}
+                      className="h-20 w-20 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#12253a] text-2xl font-black text-[#72d6ff]">
+                      {selectedEmployee.name
+                        .charAt(0)
+                        .toUpperCase()}
+                    </div>
+                  )}
+
+                  <div>
+
+                    <p className="text-xl font-black">
+                      {selectedEmployee.name}
+                    </p>
+
+                    <p className="mt-1 text-[9px] uppercase tracking-[0.2em] text-[#72d6ff]">
+                      {selectedEmployee.employeeId}
+                    </p>
+
+                  </div>
+
+                </div>
+
+                <div className="mt-8 grid gap-px border border-white/10 bg-white/10 sm:grid-cols-2">
+
+                  <div className="bg-[#07111f] p-5">
+                    <p className="text-[8px] uppercase tracking-[0.18em] text-white/25">
+                      Department
+                    </p>
+
+                    <p className="mt-2 text-sm font-bold">
+                      {selectedEmployee.department}
+                    </p>
+                  </div>
+
+                  <div className="bg-[#07111f] p-5">
+                    <p className="text-[8px] uppercase tracking-[0.18em] text-white/25">
+                      Email
+                    </p>
+
+                    <p className="mt-2 break-all text-xs text-white/60">
+                      {selectedEmployee.email}
+                    </p>
+                  </div>
+
+                  <div className="bg-[#07111f] p-5">
+                    <p className="text-[8px] uppercase tracking-[0.18em] text-white/25">
+                      Registered
+                    </p>
+
+                    <p className="mt-2 text-sm font-bold">
+                      {formatDate(
+                        selectedEmployee.createdAt
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="bg-[#07111f] p-5">
+                    <p className="text-[8px] uppercase tracking-[0.18em] text-white/25">
+                      Location
+                    </p>
+
+                    <p className="mt-2 text-xs text-white/60">
+                      {selectedEmployee.location ||
+                        "Not provided"}
+                    </p>
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+        {/* FOOTER */}
+        <footer className="mt-12 flex flex-col justify-between gap-3 border-t border-white/10 py-6 text-[8px] font-black uppercase tracking-[0.2em] text-white/20 sm:flex-row">
+
+          <span>
+            CONTROL ATLAS / TALENTRONAUT
+          </span>
+
+          <span>
+            Attendance intelligence layer
+          </span>
+
+          <span>
+            System operational
+          </span>
+
+        </footer>
 
       </div>
     </main>
