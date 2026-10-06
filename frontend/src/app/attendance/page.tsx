@@ -1,61 +1,60 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
-const API_URL = "https://attendance-backend-2nky.onrender.com";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://attendance-backend-2nky.onrender.com";
 
-export default function CheckOutPage() {
+export default function AttendancePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [name, setName] = useState("");
   const [department, setDepartment] = useState("");
   const [password, setPassword] = useState("");
 
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [cameraStream, setCameraStream] =
-    useState<MediaStream | null>(null);
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
-  const [photoCaptured, setPhotoCaptured] = useState(false);
-  const [photoPreview, setPhotoPreview] = useState("");
+  const [cameraStarted, setCameraStarted] = useState(false);
+  const [cameraError, setCameraError] = useState("");
 
-  const [latitude, setLatitude] = useState<number | null>(null);
-  const [longitude, setLongitude] = useState<number | null>(null);
+  const [location, setLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
+  const [locationEnabled, setLocationEnabled] = useState(false);
+
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [checkOutCompleted, setCheckOutCompleted] = useState(false);
-
-  const stopCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach((track) => track.stop());
-    }
-
-    setCameraStream(null);
-    setCameraOpen(false);
-  };
 
   useEffect(() => {
     return () => {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((track) => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+
+      if (photoPreview) {
+        URL.revokeObjectURL(photoPreview);
       }
     };
-  }, [cameraStream]);
+  }, [photoPreview]);
 
-  const openCamera = async () => {
-    if (checkOutCompleted) {
-      return;
-    }
-
-    setError("");
-    setMessage("");
+  const startCamera = async () => {
+    setCameraError("");
 
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        setError("Camera is not supported by this browser.");
+        setCameraError("Camera access is not supported on this device.");
         return;
+      }
+
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -67,30 +66,27 @@ export default function CheckOutPage() {
         audio: false,
       });
 
-      setCameraStream(stream);
-      setCameraOpen(true);
+      streamRef.current = stream;
 
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
 
-          videoRef.current.play().catch((err) => {
-            console.error("Video play error:", err);
-          });
-        }
-      }, 100);
+      setCameraStarted(true);
     } catch (err) {
-      console.error("Camera error:", err);
+      console.error(err);
 
-      setError(
-        "Unable to open camera. Please allow camera permission."
+      setCameraError(
+        "Camera permission is required to capture your check-out photo."
       );
+
+      setCameraStarted(false);
     }
   };
 
   const capturePhoto = () => {
     setError("");
-    setMessage("");
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -101,7 +97,7 @@ export default function CheckOutPage() {
     }
 
     if (video.videoWidth === 0 || video.videoHeight === 0) {
-      setError("Camera is not ready. Please wait a moment.");
+      setError("Camera is still starting. Please try again.");
       return;
     }
 
@@ -111,7 +107,7 @@ export default function CheckOutPage() {
     const context = canvas.getContext("2d");
 
     if (!context) {
-      setError("Unable to capture photo.");
+      setError("Unable to capture the photo.");
       return;
     }
 
@@ -123,175 +119,151 @@ export default function CheckOutPage() {
       canvas.height
     );
 
-    const image = canvas.toDataURL("image/jpeg", 0.9);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          setError("Unable to create check-out photo.");
+          return;
+        }
 
-    setPhotoPreview(image);
-    setPhotoCaptured(true);
+        if (photoPreview) {
+          URL.revokeObjectURL(photoPreview);
+        }
 
-    stopCamera();
-
-    setMessage("Employee photo captured successfully.");
+        setPhotoBlob(blob);
+        setPhotoPreview(URL.createObjectURL(blob));
+      },
+      "image/jpeg",
+      0.9
+    );
   };
 
   const retakePhoto = () => {
-    if (checkOutCompleted) {
-      return;
+    if (photoPreview) {
+      URL.revokeObjectURL(photoPreview);
     }
 
-    setPhotoPreview("");
-    setPhotoCaptured(false);
+    setPhotoBlob(null);
+    setPhotoPreview(null);
     setError("");
-    setMessage("");
-
-    openCamera();
   };
 
-  const getCurrentLocation = () => {
-    if (checkOutCompleted) {
-      return;
-    }
-
+  const enableLocation = () => {
     setError("");
-    setMessage("");
 
     if (!navigator.geolocation) {
-      setError("GPS is not supported by this browser.");
+      setError("Location is not supported on this device.");
       return;
     }
-
-    setMessage("Requesting your current location...");
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setLatitude(position.coords.latitude);
-        setLongitude(position.coords.longitude);
+        setLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
 
-        setMessage("Location captured successfully.");
+        setLocationEnabled(true);
       },
-      (err) => {
-        console.error("Location error:", err);
+      () => {
+        setLocationEnabled(false);
 
-        if (err.code === 1) {
-          setError(
-            "Location permission was denied. You can continue Check-Out without location."
-          );
-        } else if (err.code === 2) {
-          setError(
-            "Your location could not be determined. You can continue Check-Out without location."
-          );
-        } else if (err.code === 3) {
-          setError(
-            "Location request timed out. You can continue Check-Out without location."
-          );
-        } else {
-          setError(
-            "Unable to get your current location. You can continue Check-Out without location."
-          );
-        }
-
-        setMessage("");
+        setError(
+          "Location permission was not granted. You can continue without location."
+        );
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
+        timeout: 10000,
         maximumAge: 0,
       }
     );
   };
 
-  const validateForm = () => {
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    setMessage("");
+    setError("");
+
     if (!name.trim()) {
       setError("Employee Name is required.");
-      return false;
+      return;
     }
 
     if (!department.trim()) {
-      setError("Employee Department is required.");
-      return false;
-    }
-
-    if (!password.trim()) {
-      setError("Employee Password is required.");
-      return false;
-    }
-
-    if (password.length < 6) {
-      setError(
-        "Employee Password must be at least 6 characters."
-      );
-      return false;
-    }
-
-    if (!photoCaptured) {
-      setError(
-        "Employee photo is compulsory. Please capture your photo."
-      );
-      return false;
-    }
-
-    return true;
-  };
-
-  const markCheckOut = async () => {
-    if (checkOutCompleted) {
+      setError("Department is required.");
       return;
     }
 
-    setError("");
-    setMessage("");
-
-    if (!validateForm()) {
+    if (!password) {
+      setError("Password is required.");
       return;
     }
+
+    if (!photoBlob) {
+      setError("Check-Out photo is compulsory.");
+      return;
+    }
+
+    setLoading(true);
 
     try {
-      setLoading(true);
+      const formData = new FormData();
 
-      setMessage(
-        "Verifying Employee Name, Department and Password..."
+      formData.append("name", name.trim());
+      formData.append("department", department.trim());
+      formData.append("password", password);
+      formData.append(
+        "photo",
+        photoBlob,
+        "check-out-photo.jpg"
       );
 
+      if (location) {
+        formData.append(
+          "latitude",
+          String(location.latitude)
+        );
+
+        formData.append(
+          "longitude",
+          String(location.longitude)
+        );
+      }
+
       const response = await fetch(
-        API_URL + "/api/attendance/checkout",
+        `${API_BASE}/api/attendance/checkout`,
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: name.trim(),
-            department: department.trim(),
-            password: password,
-            latitude: latitude,
-            longitude: longitude,
-          }),
+          body: formData,
         }
       );
 
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.message || "Check-Out failed.");
-        setMessage("");
-        return;
+        throw new Error(
+          data?.message ||
+            "Unable to complete check-out."
+        );
       }
 
-      setCheckOutCompleted(true);
-
       setMessage(
-        "Attendance marked successfully. Check-Out completed."
+        data?.message ||
+          "Check-Out marked successfully."
       );
 
       setPassword("");
-
-      stopCamera();
     } catch (err) {
-      console.error("Check-Out error:", err);
-
-      setMessage("");
+      console.error(err);
 
       setError(
-        "Unable to connect to the attendance server."
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while marking check-out."
       );
     } finally {
       setLoading(false);
@@ -299,279 +271,503 @@ export default function CheckOutPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
-      <div className="mx-auto max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+    <main className="min-h-screen bg-[#17120e] text-[#f4eadc]">
+      <style jsx>{`
+        .exit-grid {
+          background-image:
+            linear-gradient(
+              rgba(255, 255, 255, 0.025) 1px,
+              transparent 1px
+            ),
+            linear-gradient(
+              90deg,
+              rgba(255, 255, 255, 0.025) 1px,
+              transparent 1px
+            );
+          background-size: 54px 54px;
+        }
 
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-900">
-            TALENTRONAUT PVT LTD
-          </h1>
+        .field {
+          transition:
+            border-color 180ms ease,
+            background 180ms ease,
+            box-shadow 180ms ease;
+        }
 
-          <p className="mt-2 text-sm text-slate-600">
-            Employee Check-Out
-          </p>
-        </div>
+        .field:focus {
+          outline: none;
+          border-color: #ff8a3d;
+          background: #211914;
+          box-shadow: 0 8px 30px rgba(255, 138, 61, 0.06);
+        }
 
-        {error && (
-          <div className="mt-5 rounded-lg bg-red-50 p-4 text-sm font-medium text-red-700">
-            {error}
+        .exit-button {
+          transition:
+            transform 180ms ease,
+            box-shadow 180ms ease;
+        }
+
+        .exit-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 14px 40px rgba(255, 138, 61, 0.18);
+        }
+
+        .camera-stage {
+          position: relative;
+          overflow: hidden;
+          background:
+            radial-gradient(
+              circle at 50% 50%,
+              rgba(255, 138, 61, 0.08),
+              transparent 48%
+            ),
+            #0e0b09;
+        }
+
+        .camera-stage::before,
+        .camera-stage::after {
+          content: "";
+          position: absolute;
+          width: 34px;
+          height: 34px;
+          z-index: 10;
+        }
+
+        .camera-stage::before {
+          top: 18px;
+          left: 18px;
+          border-top: 2px solid #ff8a3d;
+          border-left: 2px solid #ff8a3d;
+        }
+
+        .camera-stage::after {
+          right: 18px;
+          bottom: 18px;
+          border-right: 2px solid #ff8a3d;
+          border-bottom: 2px solid #ff8a3d;
+        }
+
+        .exit-line {
+          height: 2px;
+          background: linear-gradient(
+            90deg,
+            #ff8a3d 0%,
+            #ff8a3d 38%,
+            rgba(255, 138, 61, 0.12) 38%,
+            rgba(255, 138, 61, 0.12) 100%
+          );
+        }
+
+        @media (max-width: 700px) {
+          .exit-grid {
+            background-size: 34px 34px;
+          }
+        }
+      `}</style>
+
+      <div className="exit-grid min-h-screen">
+        {/* HEADER */}
+        <header className="border-b border-white/10">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 md:px-10">
+            <div>
+              <p className="text-[10px] font-black tracking-[0.35em] text-[#ff8a3d]">
+                TALENTRONAUT
+              </p>
+
+              <p className="mt-1 text-[9px] tracking-[0.28em] text-white/30">
+                PVT LTD / WORKFORCE SYSTEM
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-[9px] tracking-[0.25em] text-white/30">
+                SESSION CLOSE
+              </span>
+
+              <span className="h-2 w-2 rounded-full bg-[#ff8a3d] shadow-[0_0_14px_#ff8a3d]" />
+            </div>
           </div>
-        )}
+        </header>
 
-        {message && (
-          <div className="mt-5 rounded-lg bg-green-50 p-4 text-sm font-medium text-green-700">
-            {message}
+        {/* HERO */}
+        <section className="mx-auto max-w-7xl px-5 pb-12 pt-12 md:px-10 md:pt-16">
+          <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
+            <div>
+              <p className="mb-5 text-[10px] font-bold tracking-[0.32em] text-[#ff8a3d]">
+                WORKDAY / 02 / EXIT PROTOCOL
+              </p>
+
+              <h1 className="text-6xl font-black uppercase leading-[0.78] tracking-[-0.075em] sm:text-7xl md:text-8xl lg:text-9xl">
+                Sign
+                <br />
+                <span className="text-[#ff8a3d]">
+                  Out.
+                </span>
+              </h1>
+
+              <p className="mt-8 max-w-xl text-sm leading-7 text-white/40">
+                Close your active workday session.
+                Verify your identity, create a final
+                attendance image and securely submit
+                your departure record.
+              </p>
+            </div>
+
+            <div className="flex flex-col justify-end lg:pb-2">
+              <div className="border border-white/10 bg-[#100d0a]/80 p-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] uppercase tracking-[0.25em] text-white/30">
+                    Shift state
+                  </span>
+
+                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#ff8a3d]">
+                    ACTIVE
+                  </span>
+                </div>
+
+                <div className="mt-6 exit-line" />
+
+                <div className="mt-5 flex justify-between text-[9px] uppercase tracking-[0.2em] text-white/25">
+                  <span>START</span>
+                  <span>END</span>
+                </div>
+
+                <p className="mt-6 text-3xl font-black uppercase tracking-[-0.04em]">
+                  Close session
+                </p>
+
+                <p className="mt-2 text-xs leading-6 text-white/30">
+                  Your active attendance record will be
+                  completed after verification.
+                </p>
+              </div>
+            </div>
           </div>
-        )}
-
-        <section className="mt-6">
-          <h2 className="text-lg font-semibold text-slate-900">
-            1. Employee Information
-          </h2>
-
-          <label className="mt-4 block text-sm font-semibold">
-            Employee Name *
-          </label>
-
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Enter Employee Name"
-            required
-            disabled={loading || checkOutCompleted}
-            autoComplete="name"
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:bg-slate-100"
-          />
-
-          <label className="mt-4 block text-sm font-semibold">
-            Employee Department *
-          </label>
-
-          <input
-            type="text"
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-            placeholder="Enter Employee Department"
-            required
-            disabled={loading || checkOutCompleted}
-            autoComplete="organization"
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:bg-slate-100"
-          />
-
-          <label className="mt-4 block text-sm font-semibold">
-            Employee Password *
-          </label>
-
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter Employee Password"
-            required
-            minLength={6}
-            disabled={loading || checkOutCompleted}
-            autoComplete="current-password"
-            className="mt-2 w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:bg-slate-100"
-          />
-
-          <p className="mt-2 text-xs text-slate-500">
-            Password is securely verified by the attendance server.
-          </p>
         </section>
 
-        <section className="mt-8">
-          <h2 className="text-lg font-semibold text-slate-900">
-            2. Employee Photo *
-          </h2>
+        <form
+          onSubmit={handleSubmit}
+          className="mx-auto max-w-7xl px-5 pb-20 md:px-10"
+        >
+          {/* IDENTITY STRIP */}
+          <section className="border border-white/10 bg-[#100d0a]/90">
+            <div className="border-b border-white/10 px-6 py-5 md:px-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] tracking-[0.25em] text-white/25">
+                    VERIFY / 01
+                  </p>
 
-          <p className="mt-1 text-sm text-slate-500">
-            Employee photo is compulsory.
-          </p>
+                  <h2 className="mt-1 text-lg font-black uppercase">
+                    Who is leaving?
+                  </h2>
+                </div>
 
-          {!cameraOpen && !photoCaptured && (
+                <span className="text-3xl font-black text-[#ff8a3d]">
+                  A
+                </span>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-3">
+              <div className="border-b border-white/10 p-6 md:border-b-0 md:border-r">
+                <label className="mb-3 block text-[9px] font-bold uppercase tracking-[0.2em] text-white/30">
+                  Employee Name *
+                </label>
+
+                <input
+                  value={name}
+                  onChange={(e) =>
+                    setName(e.target.value)
+                  }
+                  placeholder="Full name"
+                  className="field w-full border-b border-white/15 bg-transparent px-0 py-4 text-base text-white placeholder:text-white/15"
+                  autoComplete="name"
+                />
+              </div>
+
+              <div className="border-b border-white/10 p-6 md:border-b-0 md:border-r">
+                <label className="mb-3 block text-[9px] font-bold uppercase tracking-[0.2em] text-white/30">
+                  Department *
+                </label>
+
+                <input
+                  value={department}
+                  onChange={(e) =>
+                    setDepartment(e.target.value)
+                  }
+                  placeholder="Department"
+                  className="field w-full border-b border-white/15 bg-transparent px-0 py-4 text-base text-white placeholder:text-white/15"
+                />
+              </div>
+
+              <div className="p-6">
+                <label className="mb-3 block text-[9px] font-bold uppercase tracking-[0.2em] text-white/30">
+                  Password *
+                </label>
+
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) =>
+                    setPassword(e.target.value)
+                  }
+                  placeholder="Employee password"
+                  className="field w-full border-b border-white/15 bg-transparent px-0 py-4 text-base text-white placeholder:text-white/15"
+                  autoComplete="current-password"
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* PHOTO */}
+          <section className="mt-6 grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
+            <div className="border border-white/10 bg-[#100d0a]/90">
+              <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+                <div>
+                  <p className="text-[9px] tracking-[0.25em] text-white/25">
+                    VERIFY / 02
+                  </p>
+
+                  <h2 className="mt-1 text-lg font-black uppercase">
+                    Departure Capture
+                  </h2>
+                </div>
+
+                <span className="text-3xl font-black text-[#ff8a3d]">
+                  B
+                </span>
+              </div>
+
+              <div className="p-6 md:p-8">
+                <div className="camera-stage aspect-video w-full border border-white/10">
+                  {photoPreview ? (
+                    <img
+                      src={photoPreview}
+                      alt="Check-out attendance preview"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : cameraStarted ? (
+                    <video
+                      ref={videoRef}
+                      muted
+                      playsInline
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+                      <div className="mb-5 flex h-16 w-16 items-center justify-center border border-[#ff8a3d]/40 text-2xl text-[#ff8a3d]">
+                        ↘
+                      </div>
+
+                      <p className="text-xs font-black uppercase tracking-[0.2em]">
+                        Departure image
+                      </p>
+
+                      <p className="mt-3 max-w-sm text-xs leading-6 text-white/30">
+                        Capture one final live image before
+                        closing the workday session.
+                      </p>
+                    </div>
+                  )}
+
+                  {cameraStarted && !photoPreview && (
+                    <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+                      <span className="bg-black/70 px-3 py-2 text-[9px] font-bold tracking-[0.2em] text-[#ff8a3d]">
+                        ● CAMERA ACTIVE
+                      </span>
+
+                      <span className="bg-black/70 px-3 py-2 text-[9px] tracking-[0.15em] text-white/40">
+                        EXIT FRAME
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <canvas
+                  ref={canvasRef}
+                  className="hidden"
+                />
+
+                {cameraError && (
+                  <p className="mt-4 border border-red-400/20 bg-red-400/5 px-4 py-3 text-xs text-red-300">
+                    {cameraError}
+                  </p>
+                )}
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  {!cameraStarted ? (
+                    <button
+                      type="button"
+                      onClick={startCamera}
+                      className="exit-button bg-[#ff8a3d] px-5 py-4 text-xs font-black uppercase tracking-[0.15em] text-black"
+                    >
+                      Start Departure Camera
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={capturePhoto}
+                      className="exit-button bg-[#ff8a3d] px-5 py-4 text-xs font-black uppercase tracking-[0.15em] text-black"
+                    >
+                      Capture Exit Photo
+                    </button>
+                  )}
+
+                  {photoPreview && (
+                    <button
+                      type="button"
+                      onClick={retakePhoto}
+                      className="border border-white/15 px-5 py-4 text-xs font-bold uppercase tracking-[0.15em] text-white/65 hover:border-[#ff8a3d]/50 hover:text-white"
+                    >
+                      Retake Image
+                    </button>
+                  )}
+                </div>
+
+                {!photoPreview && (
+                  <p className="mt-4 text-[9px] uppercase tracking-[0.18em] text-white/25">
+                    * Departure photo required
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* SIDE PANEL */}
+            <aside className="border border-white/10 bg-[#100d0a]/90">
+              <div className="border-b border-white/10 px-6 py-5">
+                <p className="text-[9px] tracking-[0.25em] text-white/25">
+                  VERIFY / 03
+                </p>
+
+                <h2 className="mt-1 text-lg font-black uppercase">
+                  Exit Signal
+                </h2>
+              </div>
+
+              <div className="flex h-full flex-col p-6">
+                <div className="flex-1">
+                  <div className="flex h-28 items-center justify-center border border-[#ff8a3d]/20 bg-[#ff8a3d]/[0.03]">
+                    <span className="text-6xl font-black text-[#ff8a3d]">
+                      →
+                    </span>
+                  </div>
+
+                  <p className="mt-7 text-xs font-bold uppercase tracking-[0.16em]">
+                    Mobile Location
+                  </p>
+
+                  <p className="mt-3 text-xs leading-6 text-white/30">
+                    Optional location information can be
+                    attached to your departure record.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={enableLocation}
+                    className={`mt-6 w-full px-5 py-4 text-xs font-black uppercase tracking-[0.15em] ${
+                      locationEnabled
+                        ? "bg-[#ff8a3d] text-black"
+                        : "border border-white/15 text-white/60 hover:border-[#ff8a3d]/50"
+                    }`}
+                  >
+                    {locationEnabled
+                      ? "Location Attached ✓"
+                      : "Attach Location"}
+                  </button>
+                </div>
+
+                <div className="mt-10 border-t border-white/10 pt-5">
+                  <div className="flex justify-between text-[9px] uppercase tracking-[0.18em] text-white/25">
+                    <span>Required</span>
+                    <span className="text-[#ff8a3d]">
+                      Identity + Photo
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex justify-between text-[9px] uppercase tracking-[0.18em] text-white/25">
+                    <span>Optional</span>
+                    <span>Location</span>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </section>
+
+          {/* MESSAGE */}
+          {error && (
+            <div className="mt-6 border border-red-400/20 bg-red-400/5 px-6 py-5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-300">
+                Exit Protocol Blocked
+              </p>
+
+              <p className="mt-2 text-sm text-red-200/80">
+                {error}
+              </p>
+            </div>
+          )}
+
+          {message && (
+            <div className="mt-6 border border-[#ff8a3d]/30 bg-[#ff8a3d]/5 px-6 py-7">
+              <div className="flex items-start gap-5">
+                <div className="text-3xl text-[#ff8a3d]">
+                  ✓
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#ff8a3d]">
+                    Workday Closed
+                  </p>
+
+                  <p className="mt-2 text-xl font-black uppercase">
+                    {message}
+                  </p>
+
+                  <p className="mt-2 text-xs leading-6 text-white/35">
+                    Your active attendance session has been
+                    completed successfully.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* FINAL ACTION */}
+          <div className="mt-8 flex flex-col gap-5 border-t border-white/10 pt-8 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[9px] font-bold tracking-[0.25em] text-white/25">
+                FINALIZE WORKDAY
+              </p>
+
+              <p className="mt-2 text-xs text-white/35">
+                Verify all required information before closing
+                your attendance session.
+              </p>
+            </div>
+
             <button
-              type="button"
-              onClick={openCamera}
-              disabled={loading || checkOutCompleted}
-              className="mt-4 w-full rounded-lg bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+              type="submit"
+              disabled={loading}
+              className="exit-button min-w-[250px] bg-[#ff8a3d] px-8 py-5 text-sm font-black uppercase tracking-[0.16em] text-black disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Open Camera
+              {loading
+                ? "Closing Session..."
+                : "Close Workday →"}
             </button>
-          )}
+          </div>
+        </form>
 
-          {cameraOpen && (
-            <div className="mt-4">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full rounded-xl bg-black"
-              />
+        <footer className="border-t border-white/10 px-5 py-6 md:px-10">
+          <div className="mx-auto flex max-w-7xl flex-col gap-2 text-[9px] uppercase tracking-[0.2em] text-white/20 sm:flex-row sm:items-center sm:justify-between">
+            <span>TALENTRONAUT PVT LTD</span>
 
-              <button
-                type="button"
-                onClick={capturePhoto}
-                disabled={checkOutCompleted}
-                className="mt-4 w-full rounded-lg bg-green-600 px-4 py-3 font-semibold text-white disabled:opacity-50"
-              >
-                Capture Photo
-              </button>
+            <span>
+              SMART ATTENDANCE / SESSION CLOSURE
+            </span>
 
-              <button
-                type="button"
-                onClick={stopCamera}
-                disabled={checkOutCompleted}
-                className="mt-3 w-full rounded-lg border px-4 py-3 disabled:opacity-50"
-              >
-                Cancel Camera
-              </button>
-            </div>
-          )}
-
-          <canvas ref={canvasRef} className="hidden" />
-
-          {photoPreview && (
-            <div className="mt-4">
-              <img
-                src={photoPreview}
-                alt="Employee captured photo"
-                className="mx-auto h-56 w-56 rounded-xl object-cover"
-              />
-
-              <p className="mt-2 text-center font-semibold text-green-600">
-                Photo Captured
-              </p>
-
-              <button
-                type="button"
-                onClick={retakePhoto}
-                disabled={loading || checkOutCompleted}
-                className="mt-3 w-full rounded-lg border px-4 py-3 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Retake Photo
-              </button>
-            </div>
-          )}
-        </section>
-
-        <section className="mt-8">
-          <h2 className="text-lg font-semibold text-slate-900">
-            3. Mobile Location (Optional)
-          </h2>
-
-          <p className="mt-1 text-sm text-slate-500">
-            You may capture your current mobile location if you want
-            to save it with your attendance.
-          </p>
-
-          <button
-            type="button"
-            onClick={getCurrentLocation}
-            disabled={loading || checkOutCompleted}
-            className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Get My Location
-          </button>
-
-          {latitude !== null && longitude !== null && (
-            <div className="mt-4 rounded-lg bg-green-50 p-4 text-sm">
-              <p>Latitude: {latitude}</p>
-              <p>Longitude: {longitude}</p>
-
-              <p className="mt-2 font-semibold text-green-600">
-                Location Captured
-              </p>
-            </div>
-          )}
-
-          {latitude === null && longitude === null && (
-            <p className="mt-3 text-xs text-slate-500">
-              Location is optional. You can Check-Out without
-              providing your location.
-            </p>
-          )}
-        </section>
-
-        <section className="mt-8">
-          <button
-            type="button"
-            onClick={markCheckOut}
-            disabled={loading || checkOutCompleted}
-            className={
-              "w-full rounded-lg px-4 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-60 " +
-              (checkOutCompleted
-                ? "bg-green-700"
-                : "bg-green-600 hover:bg-green-700")
-            }
-          >
-            {checkOutCompleted
-              ? "CHECKED OUT"
-              : loading
-              ? "Saving Attendance..."
-              : "CHECK OUT"}
-          </button>
-        </section>
-
-        <div className="mt-6 rounded-xl bg-slate-50 p-4">
-          <p className="font-semibold text-slate-900">
-            Check-Out Requirements
-          </p>
-
-          <ul className="mt-3 space-y-2 text-sm">
-            <li>
-              {name.trim() ? "Complete" : "Pending"} Employee Name
-            </li>
-
-            <li>
-              {department.trim()
-                ? "Complete"
-                : "Pending"} Employee Department
-            </li>
-
-            <li>
-              {password.trim()
-                ? "Complete"
-                : "Pending"} Employee Password
-            </li>
-
-            <li>
-              {photoCaptured
-                ? "Complete"
-                : "Pending"} Employee Photo
-            </li>
-
-            <li>
-              Mobile Location (Optional)
-            </li>
-          </ul>
-        </div>
-
-        <div className="mt-5 rounded-xl border border-green-100 bg-green-50 p-4 text-xs text-green-800">
-          <p className="font-semibold">
-            Check-Out Information
-          </p>
-
-          <p className="mt-2">
-            Employee Name, Department and Password are required
-            before Check-Out.
-          </p>
-
-          <p className="mt-2">
-            Employee photo is compulsory.
-          </p>
-
-          <p className="mt-2">
-            Mobile location is optional.
-          </p>
-
-          <p className="mt-2">
-            Check-Out records the current date and time against
-            the employee active attendance.
-          </p>
-        </div>
-
+            <span>EXIT PROTOCOL READY</span>
+          </div>
+        </footer>
       </div>
     </main>
   );
