@@ -8,18 +8,19 @@ datasource db {
 }
 
 model Employee {
-  id                  Int                  @id @default(autoincrement())
-  employeeId          String               @unique
-  name                String
-  email               String               @unique
-  department          String
-  passwordHash        String?
-  photoUrl            String?
-  location            String?
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  attendance          Attendance[]
-  WebAuthnCredential  WebAuthnCredential[]
+  id                 Int                  @id @default(autoincrement())
+  employeeId         String               @unique
+  name               String
+  email              String               @unique
+  department         String
+  passwordHash       String?
+  photoUrl           String?
+  location           String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  attendance         Attendance[]
+  WebAuthnCredential WebAuthnCredential[]
+  auditEvents        AuditEvent[]
 }
 
 model Attendance {
@@ -31,9 +32,9 @@ model Attendance {
   status     String    @default("Present")
   latitude  Float?
   longitude Float?
-  createdAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
 
-  employee  Employee  @relation(fields: [employeeId], references: [employeeId])
+  employee Employee @relation(fields: [employeeId], references: [employeeId])
 
   @@index([employeeId])
   @@index([date])
@@ -48,7 +49,26 @@ model WebAuthnCredential {
   transports   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  Employee     Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+
+  Employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@index([employeeId])
+}
+
+model AuditEvent {
+  id          Int       @id @default(autoincrement())
+  eventType   String
+  employeeId  String?
+  actor       String?
+  description String?
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  employee Employee? @relation(fields: [employeeId], references: [employeeId], onDelete: SetNull)
+
+  @@index([eventType])
+  @@index([employeeId])
+  @@index([createdAt])
 }

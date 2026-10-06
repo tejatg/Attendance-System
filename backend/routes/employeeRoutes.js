@@ -3,6 +3,7 @@ const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcrypt");
 const multer = require("multer");
 const cloudinary = require("../utils/cloudinary");
+const { logAuditEvent } = require("../utils/auditLogger");
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -312,6 +313,27 @@ router.post("/", upload.single("photo"), async (req, res) => {
         photoUrl: true,
         createdAt: true,
         updatedAt: true,
+      },
+    });
+
+    /*
+      AUDIT EVENT
+    */
+
+    await logAuditEvent({
+      eventType: "EMPLOYEE_REGISTERED",
+      employeeId: employee.employeeId,
+      actor: "EMPLOYEE_REGISTRATION",
+      description:
+        `Employee ${employee.name} was registered successfully.`,
+      ipAddress: req.ip || null,
+      userAgent: req.get("user-agent") || null,
+      metadata: {
+        source: "employee-registration",
+        department: employee.department,
+        email: employee.email,
+        hasPhoto: Boolean(employee.photoUrl),
+        hasLocation: Boolean(employee.location),
       },
     });
 

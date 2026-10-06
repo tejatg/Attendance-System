@@ -1,6 +1,7 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcrypt");
+const { logAuditEvent } = require("../utils/auditLogger");
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -67,12 +68,20 @@ router.post("/", async (req, res) => {
       longitude,
     } = req.body;
 
+    /*
+    VALIDATE NAME
+    */
+
     if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
         message: "Employee Name is required.",
       });
     }
+
+    /*
+    VALIDATE DEPARTMENT
+    */
 
     if (!department || !department.trim()) {
       return res.status(400).json({
@@ -81,12 +90,20 @@ router.post("/", async (req, res) => {
       });
     }
 
+    /*
+    VALIDATE PASSWORD
+    */
+
     if (!password || !password.trim()) {
       return res.status(400).json({
         success: false,
         message: "Employee Password is required.",
       });
     }
+
+    /*
+    FIND EMPLOYEE
+    */
 
     const employee = await prisma.employee.findFirst({
       where: {
@@ -101,14 +118,50 @@ router.post("/", async (req, res) => {
       },
     });
 
+    /*
+    EMPLOYEE NOT FOUND
+    */
+
     if (!employee) {
+      await logAuditEvent({
+        eventType: "ATTENDANCE_CHECK_IN_FAILED",
+        actor: "CHECK_IN",
+        description:
+          "Check-In failed because the employee name or department was not found.",
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") || null,
+        metadata: {
+          reason: "EMPLOYEE_NOT_FOUND",
+          name: name.trim(),
+          department: department.trim(),
+        },
+      });
+
       return res.status(401).json({
         success: false,
         message: "Invalid Employee Name or Department.",
       });
     }
 
+    /*
+    PASSWORD NOT CONFIGURED
+    */
+
     if (!employee.passwordHash) {
+      await logAuditEvent({
+        eventType: "ATTENDANCE_CHECK_IN_FAILED",
+        employeeId: employee.employeeId,
+        actor: "CHECK_IN",
+        description:
+          "Check-In failed because the employee password is not configured.",
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") || null,
+        metadata: {
+          reason: "PASSWORD_NOT_CONFIGURED",
+          department: employee.department,
+        },
+      });
+
       return res.status(403).json({
         success: false,
         message:
@@ -116,18 +169,40 @@ router.post("/", async (req, res) => {
       });
     }
 
+    /*
+    VERIFY PASSWORD
+    */
+
     const passwordValid = await bcrypt.compare(
       password,
       employee.passwordHash
     );
 
     if (!passwordValid) {
+      await logAuditEvent({
+        eventType: "ATTENDANCE_CHECK_IN_FAILED",
+        employeeId: employee.employeeId,
+        actor: "CHECK_IN",
+        description:
+          "Check-In failed because the supplied password was invalid.",
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") || null,
+        metadata: {
+          reason: "INVALID_PASSWORD",
+          department: employee.department,
+        },
+      });
+
       return res.status(401).json({
         success: false,
         message:
           "Invalid Employee Name, Department or Password.",
       });
     }
+
+    /*
+    OPTIONAL GPS
+    */
 
     let userLatitude = null;
     let userLongitude = null;
@@ -156,6 +231,10 @@ router.post("/", async (req, res) => {
       }
     }
 
+    /*
+    FIND TODAY'S ATTENDANCE
+    */
+
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
@@ -173,7 +252,26 @@ router.post("/", async (req, res) => {
         },
       });
 
+    /*
+    DUPLICATE CHECK-IN
+    */
+
     if (existingAttendance) {
+      await logAuditEvent({
+        eventType: "ATTENDANCE_CHECK_IN_FAILED",
+        employeeId: employee.employeeId,
+        actor: "CHECK_IN",
+        description:
+          "Check-In rejected because attendance was already marked for today.",
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") || null,
+        metadata: {
+          reason: "DUPLICATE_ATTENDANCE",
+          department: employee.department,
+          attendanceId: existingAttendance.id,
+        },
+      });
+
       return res.status(409).json({
         success: false,
         message:
@@ -181,6 +279,10 @@ router.post("/", async (req, res) => {
         attendance: existingAttendance,
       });
     }
+
+    /*
+    CREATE ATTENDANCE
+    */
 
     const attendance =
       await prisma.attendance.create({
@@ -215,6 +317,31 @@ router.post("/", async (req, res) => {
           },
         },
       });
+
+    /*
+    SUCCESSFUL CHECK-IN AUDIT
+    */
+
+    await logAuditEvent({
+      eventType: "ATTENDANCE_CHECK_IN",
+      employeeId: employee.employeeId,
+      actor: "CHECK_IN",
+      description:
+        `Employee ${employee.name} successfully checked in.`,
+      ipAddress: req.ip || null,
+      userAgent: req.get("user-agent") || null,
+      metadata: {
+        attendanceId: attendance.id,
+        department: employee.department,
+        latitude: userLatitude,
+        longitude: userLongitude,
+        status: attendance.status,
+      },
+    });
+
+    /*
+    SUCCESS RESPONSE
+    */
 
     res.status(201).json({
       success: true,
@@ -305,6 +432,20 @@ router.put("/checkout", async (req, res) => {
     */
 
     if (employees.length === 0) {
+      await logAuditEvent({
+        eventType: "ATTENDANCE_CHECK_OUT_FAILED",
+        actor: "CHECK_OUT",
+        description:
+          "Check-Out failed because the employee name or department was not found.",
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") || null,
+        metadata: {
+          reason: "EMPLOYEE_NOT_FOUND",
+          name: name.trim(),
+          department: department.trim(),
+        },
+      });
+
       return res.status(401).json({
         success: false,
         message: "Invalid Employee Name or Department.",
@@ -337,6 +478,20 @@ router.put("/checkout", async (req, res) => {
     */
 
     if (matchingEmployees.length === 0) {
+      await logAuditEvent({
+        eventType: "ATTENDANCE_CHECK_OUT_FAILED",
+        actor: "CHECK_OUT",
+        description:
+          "Check-Out failed because the supplied password was invalid.",
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") || null,
+        metadata: {
+          reason: "INVALID_PASSWORD",
+          name: name.trim(),
+          department: department.trim(),
+        },
+      });
+
       return res.status(401).json({
         success: false,
         message:
@@ -349,6 +504,21 @@ router.put("/checkout", async (req, res) => {
     */
 
     if (matchingEmployees.length > 1) {
+      await logAuditEvent({
+        eventType: "ATTENDANCE_CHECK_OUT_FAILED",
+        actor: "CHECK_OUT",
+        description:
+          "Check-Out failed because multiple employee records matched the supplied identity.",
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") || null,
+        metadata: {
+          reason: "MULTIPLE_EMPLOYEE_MATCH",
+          name: name.trim(),
+          department: department.trim(),
+          matchCount: matchingEmployees.length,
+        },
+      });
+
       return res.status(409).json({
         success: false,
         message:
@@ -404,7 +574,25 @@ router.put("/checkout", async (req, res) => {
         },
       });
 
+    /*
+    NO ACTIVE ATTENDANCE
+    */
+
     if (!attendance) {
+      await logAuditEvent({
+        eventType: "ATTENDANCE_CHECK_OUT_FAILED",
+        employeeId: employee.employeeId,
+        actor: "CHECK_OUT",
+        description:
+          "Check-Out failed because no active attendance record was found.",
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") || null,
+        metadata: {
+          reason: "NO_ACTIVE_ATTENDANCE",
+          department: employee.department,
+        },
+      });
+
       return res.status(404).json({
         success: false,
         message:
@@ -450,6 +638,32 @@ router.put("/checkout", async (req, res) => {
           },
         },
       });
+
+    /*
+    SUCCESSFUL CHECK-OUT AUDIT
+    */
+
+    await logAuditEvent({
+      eventType: "ATTENDANCE_CHECK_OUT",
+      employeeId: employee.employeeId,
+      actor: "CHECK_OUT",
+      description:
+        `Employee ${employee.name} successfully checked out.`,
+      ipAddress: req.ip || null,
+      userAgent: req.get("user-agent") || null,
+      metadata: {
+        attendanceId: updatedAttendance.id,
+        department: employee.department,
+        latitude: userLatitude,
+        longitude: userLongitude,
+        checkIn: updatedAttendance.checkIn,
+        checkOut: updatedAttendance.checkOut,
+      },
+    });
+
+    /*
+    SUCCESS RESPONSE
+    */
 
     res.json({
       success: true,
