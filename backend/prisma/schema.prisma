@@ -27,11 +27,11 @@ model Attendance {
   id         Int       @id @default(autoincrement())
   employeeId String
   date       DateTime  @default(now())
-  checkIn   DateTime?
-  checkOut  DateTime?
+  checkIn    DateTime?
+  checkOut   DateTime?
   status     String    @default("Present")
-  latitude  Float?
-  longitude Float?
+  latitude   Float?
+  longitude  Float?
   createdAt  DateTime  @default(now())
 
   employee Employee @relation(fields: [employeeId], references: [employeeId])
@@ -71,4 +71,16 @@ model AuditEvent {
   @@index([eventType])
   @@index([employeeId])
   @@index([createdAt])
+}
+
+model Admin {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  name         String?
+  role         String   @default("ADMIN")
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

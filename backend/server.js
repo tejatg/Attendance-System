@@ -8,23 +8,22 @@ const {
   attendanceLimiter,
 } = require("./middleware/security");
 
+const {
+  requireAdminAuth,
+} = require("./middleware/adminAuth");
+
 const app = express();
 
-const PORT = process.env.PORT || 5000;
+const PORT =
+  process.env.PORT || 5000;
 
 /*
-|--------------------------------------------------------------------------
-| CORE CONFIGURATION
-|--------------------------------------------------------------------------
+========================================
+APPLICATION SECURITY
+========================================
 */
 
 app.disable("x-powered-by");
-
-/*
-|--------------------------------------------------------------------------
-| SECURITY LAYER
-|--------------------------------------------------------------------------
-*/
 
 app.use(
   helmet({
@@ -35,15 +34,27 @@ app.use(
 app.use(
   cors({
     origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+    ],
   })
 );
 
 /*
-|--------------------------------------------------------------------------
-| REQUEST CONTROL
-|--------------------------------------------------------------------------
+========================================
+REQUEST BODY PARSING
+========================================
 */
 
 app.use(
@@ -60,117 +71,124 @@ app.use(
 );
 
 /*
-|--------------------------------------------------------------------------
-| REQUEST OBSERVABILITY
-|--------------------------------------------------------------------------
+========================================
+REQUEST LOGGING
+========================================
 */
 
 app.use(
-  morgan(":method :url :status :response-time ms")
+  morgan(
+    ":method :url :status :response-time ms"
+  )
 );
 
 /*
-|--------------------------------------------------------------------------
-| API SECURITY GATE
-|--------------------------------------------------------------------------
+========================================
+API RATE LIMITING
+========================================
 */
 
-app.use("/api", apiLimiter);
+app.use(
+  "/api",
+  apiLimiter
+);
 
 /*
-|--------------------------------------------------------------------------
-| ROOT SYSTEM IDENTITY
-|--------------------------------------------------------------------------
+========================================
+ROOT
+========================================
 */
 
 app.get("/", (req, res) => {
   res.json({
     success: true,
-
-    system: "TALENTRONAUT SMART ATTENDANCE",
-
-    module: "ATTENDANCE CONTROL CORE",
-
+    system:
+      "TALENTRONAUT SMART ATTENDANCE",
+    module:
+      "ATTENDANCE CONTROL CORE",
     status: "ONLINE",
-
     version: "2.0.0",
-
-    timestamp: new Date().toISOString(),
+    timestamp:
+      new Date().toISOString(),
   });
 });
 
 /*
-|--------------------------------------------------------------------------
-| HEALTH CHECK
-|--------------------------------------------------------------------------
+========================================
+HEALTH CHECK
+========================================
 */
 
-app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-
-    system: "Smart Attendance Backend",
-
-    status: "HEALTHY",
-
-    service: "Attendance Control Core",
-
-    timestamp: new Date().toISOString(),
-  });
-});
+app.get(
+  "/api/health",
+  (req, res) => {
+    res.json({
+      success: true,
+      system:
+        "Smart Attendance Backend",
+      status: "HEALTHY",
+      service:
+        "Attendance Control Core",
+      timestamp:
+        new Date().toISOString(),
+    });
+  }
+);
 
 /*
-|--------------------------------------------------------------------------
-| SYSTEM STATUS
-|--------------------------------------------------------------------------
+========================================
+SYSTEM STATUS
+========================================
 */
 
-app.get("/api/system/status", (req, res) => {
-  res.json({
-    success: true,
+app.get(
+  "/api/system/status",
+  (req, res) => {
+    res.json({
+      success: true,
 
-    system: {
-      name: "TALENTRONAUT SMART ATTENDANCE",
+      system: {
+        name:
+          "TALENTRONAUT SMART ATTENDANCE",
+        core:
+          "ATTENDANCE CONTROL CORE",
+        status:
+          "OPERATIONAL",
+      },
 
-      core: "ATTENDANCE CONTROL CORE",
+      runtime: {
+        node:
+          process.version,
 
-      status: "OPERATIONAL",
-    },
+        uptimeSeconds:
+          Math.floor(
+            process.uptime()
+          ),
 
-    runtime: {
-      node: process.version,
+        environment:
+          process.env.NODE_ENV ||
+          "development",
+      },
 
-      uptimeSeconds: Math.floor(process.uptime()),
+      services: {
+        api: "ONLINE",
+        database: "CONNECTED",
+        identityEngine: "READY",
+        attendanceEngine: "READY",
+        securityEngine: "ACTIVE",
+        mediaEngine: "READY",
+      },
 
-      environment:
-        process.env.NODE_ENV || "development",
-    },
-
-    services: {
-      api: "ONLINE",
-
-      database: "CONNECTED",
-
-      identityEngine: "READY",
-
-      attendanceEngine: "READY",
-
-      securityEngine: "ACTIVE",
-
-      mediaEngine: "READY",
-    },
-
-    timestamp: new Date().toISOString(),
-  });
-});
+      timestamp:
+        new Date().toISOString(),
+    });
+  }
+);
 
 /*
-|--------------------------------------------------------------------------
-| ATTENDANCE SECURITY GATE
-|--------------------------------------------------------------------------
-|
-| Attendance endpoints receive a stricter rate limit.
-|
+========================================
+ATTENDANCE RATE LIMIT
+========================================
 */
 
 app.use(
@@ -179,79 +197,135 @@ app.use(
 );
 
 /*
-|--------------------------------------------------------------------------
-| EMPLOYEE ROUTES
-|--------------------------------------------------------------------------
+========================================
+EMPLOYEE ROUTES
+========================================
+
+PUBLIC:
+POST /api/employees
+
+PROTECTED:
+GET /api/employees
+GET /api/employees/:id
+========================================
 */
 
 try {
-  const employeeRoutes = require("./routes/employeeRoutes");
+  const employeeRoutes =
+    require("./routes/employeeRoutes");
+
+  /*
+  ----------------------------------------
+  ADMIN PROTECTION FOR EMPLOYEE LIST
+  ----------------------------------------
+  */
+
+  app.get(
+    "/api/employees",
+    requireAdminAuth
+  );
+
+  /*
+  ----------------------------------------
+  ADMIN PROTECTION FOR SINGLE EMPLOYEE
+  ----------------------------------------
+  */
+
+  app.get(
+    "/api/employees/:id",
+    requireAdminAuth
+  );
+
+  /*
+  ----------------------------------------
+  EMPLOYEE ROUTER
+  ----------------------------------------
+  */
 
   app.use(
     "/api/employees",
     employeeRoutes
   );
+
 } catch (error) {
   console.error(
     "Employee routes could not be loaded:"
   );
 
-  console.error(error.message);
+  console.error(
+    error.message
+  );
 }
 
 /*
-|--------------------------------------------------------------------------
-| ATTENDANCE ROUTES
-|--------------------------------------------------------------------------
+========================================
+ATTENDANCE ROUTES
+========================================
 */
 
 try {
-  const attendanceRoutes = require("./routes/attendanceRoutes");
+  const attendanceRoutes =
+    require("./routes/attendanceRoutes");
 
   app.use(
     "/api/attendance",
     attendanceRoutes
   );
+
 } catch (error) {
   console.error(
     "Attendance routes could not be loaded:"
   );
 
-  console.error(error.message);
+  console.error(
+    error.message
+  );
 }
 
 /*
-|--------------------------------------------------------------------------
-| ADMIN ROUTES
-|--------------------------------------------------------------------------
+========================================
+ADMIN ROUTES
+========================================
+
+POST /api/admin/login
+GET  /api/admin/me
+========================================
 */
 
 try {
-  const adminRoutes = require("./routes/adminRoutes");
+  const adminRoutes =
+    require("./routes/adminRoutes");
 
   app.use(
     "/api/admin",
     adminRoutes
   );
+
 } catch (error) {
-  console.log(
-    "Admin routes not enabled yet."
+  console.error(
+    "Admin routes could not be loaded:"
+  );
+
+  console.error(
+    error.message
   );
 }
 
 /*
-|--------------------------------------------------------------------------
-| SYSTEM ROUTES
-|--------------------------------------------------------------------------
+========================================
+SYSTEM ROUTES
+========================================
 */
 
 try {
-  const systemRoutes = require("./routes/systemRoutes");
+  const systemRoutes =
+    require("./routes/systemRoutes");
 
   app.use(
     "/api/system",
     systemRoutes
   );
+
 } catch (error) {
   console.log(
     "System routes not enabled yet."
@@ -259,34 +333,44 @@ try {
 }
 
 /*
-|--------------------------------------------------------------------------
-| 404 CONTROL
-|--------------------------------------------------------------------------
-*/
-
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-
-    error: "ENDPOINT_NOT_FOUND",
-
-    message:
-      "The requested API endpoint does not exist.",
-
-    path: req.originalUrl,
-
-    timestamp: new Date().toISOString(),
-  });
-});
-
-/*
-|--------------------------------------------------------------------------
-| GLOBAL ERROR CONTROL
-|--------------------------------------------------------------------------
+========================================
+404 HANDLER
+========================================
 */
 
 app.use(
-  (error, req, res, next) => {
+  (req, res) => {
+    res.status(404).json({
+      success: false,
+
+      error:
+        "ENDPOINT_NOT_FOUND",
+
+      message:
+        "The requested API endpoint does not exist.",
+
+      path:
+        req.originalUrl,
+
+      timestamp:
+        new Date().toISOString(),
+    });
+  }
+);
+
+/*
+========================================
+GLOBAL ERROR HANDLER
+========================================
+*/
+
+app.use(
+  (
+    error,
+    req,
+    res,
+    next
+  ) => {
     console.error(
       "========================================"
     );
@@ -306,20 +390,22 @@ app.use(
     ).json({
       success: false,
 
-      error: "INTERNAL_SERVER_ERROR",
+      error:
+        "INTERNAL_SERVER_ERROR",
 
       message:
         "The Attendance Control Core encountered an unexpected error.",
 
-      timestamp: new Date().toISOString(),
+      timestamp:
+        new Date().toISOString(),
     });
   }
 );
 
 /*
-|--------------------------------------------------------------------------
-| SERVER
-|--------------------------------------------------------------------------
+========================================
+START SERVER
+========================================
 */
 
 app.listen(
@@ -358,7 +444,8 @@ app.listen(
 
     console.log(
       `ENVIRONMENT  : ${
-        process.env.NODE_ENV || "development"
+        process.env.NODE_ENV ||
+        "development"
       }`
     );
 
@@ -372,6 +459,14 @@ app.listen(
 
     console.log(
       "MONITORING   : ACTIVE"
+    );
+
+    console.log(
+      "ADMIN AUTH   : JWT ACTIVE"
+    );
+
+    console.log(
+      "EMPLOYEE GET : ADMIN ONLY"
     );
 
     console.log(
