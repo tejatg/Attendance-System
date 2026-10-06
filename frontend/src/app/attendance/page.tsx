@@ -19,6 +19,7 @@ export default function AttendancePage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const [cameraStarted, setCameraStarted] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
   const [cameraError, setCameraError] = useState("");
 
   const [location, setLocation] = useState<{
@@ -36,52 +37,194 @@ export default function AttendancePage() {
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
       }
+    };
+  }, []);
 
+  useEffect(() => {
+    return () => {
       if (photoPreview) {
         URL.revokeObjectURL(photoPreview);
       }
     };
   }, [photoPreview]);
 
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    const video = videoRef.current;
+
+    if (video) {
+      video.pause();
+      video.srcObject = null;
+    }
+
+    setCameraStarted(false);
+  };
+
   const startCamera = async () => {
     setCameraError("");
+    setError("");
+    setCameraLoading(true);
 
     try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraError("Camera access is not supported on this device.");
-        return;
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia
+      ) {
+        throw new Error(
+          "Camera access is not supported by this browser."
+        );
       }
 
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current
+          .getTracks()
+          .forEach((track) => track.stop());
+
+        streamRef.current = null;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "user",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
+      const stream =
+        await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: {
+              ideal: "user",
+            },
+            width: {
+              ideal: 1280,
+            },
+            height: {
+              ideal: 720,
+            },
+            aspectRatio: {
+              ideal: 16 / 9,
+            },
+          },
+          audio: false,
+        });
 
       streamRef.current = stream;
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      const attachVideo = async () => {
+        const video = videoRef.current;
 
-      setCameraStarted(true);
+        if (!video) {
+          throw new Error(
+            "Camera preview is not ready. Please try again."
+          );
+        }
+
+        video.srcObject = stream;
+        video.muted = true;
+        video.autoplay = true;
+        video.playsInline = true;
+
+        await new Promise<void>((resolve) => {
+          if (video.readyState >= 1) {
+            resolve();
+            return;
+          }
+
+          const handleMetadata = () => {
+            video.removeEventListener(
+              "loadedmetadata",
+              handleMetadata
+            );
+
+            resolve();
+          };
+
+          video.addEventListener(
+            "loadedmetadata",
+            handleMetadata
+          );
+        });
+
+        await video.play();
+
+        if (
+          video.videoWidth === 0 ||
+          video.videoHeight === 0
+        ) {
+          throw new Error(
+            "Camera started but no video frames are available."
+          );
+        }
+
+        setCameraStarted(true);
+        setCameraLoading(false);
+      };
+
+      requestAnimationFrame(() => {
+        void attachVideo().catch((cameraAttachError) => {
+          console.error(cameraAttachError);
+
+          if (streamRef.current) {
+            streamRef.current
+              .getTracks()
+              .forEach((track) => track.stop());
+
+            streamRef.current = null;
+          }
+
+          setCameraStarted(false);
+          setCameraLoading(false);
+
+          setCameraError(
+            cameraAttachError instanceof Error
+              ? cameraAttachError.message
+              : "Unable to start the camera preview."
+          );
+        });
+      });
     } catch (err) {
       console.error(err);
 
-      setCameraError(
-        "Camera permission is required to capture your check-out photo."
-      );
+      if (streamRef.current) {
+        streamRef.current
+          .getTracks()
+          .forEach((track) => track.stop());
+
+        streamRef.current = null;
+      }
 
       setCameraStarted(false);
+      setCameraLoading(false);
+
+      if (
+        err instanceof DOMException &&
+        err.name === "NotAllowedError"
+      ) {
+        setCameraError(
+          "Camera permission was denied. Please allow camera access in your browser settings."
+        );
+      } else if (
+        err instanceof DOMException &&
+        err.name === "NotFoundError"
+      ) {
+        setCameraError(
+          "No camera was found on this device."
+        );
+      } else if (
+        err instanceof DOMException &&
+        err.name === "NotReadableError"
+      ) {
+        setCameraError(
+          "The camera is currently being used by another application."
+        );
+      } else {
+        setCameraError(
+          err instanceof Error
+            ? err.message
+            : "Unable to start the camera."
+        );
+      }
     }
   };
 
@@ -96,8 +239,14 @@ export default function AttendancePage() {
       return;
     }
 
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      setError("Camera is still starting. Please try again.");
+    if (
+      video.readyState < 2 ||
+      video.videoWidth === 0 ||
+      video.videoHeight === 0
+    ) {
+      setError(
+        "Camera is still starting. Please wait a moment and try again."
+      );
       return;
     }
 
@@ -111,6 +260,11 @@ export default function AttendancePage() {
       return;
     }
 
+    context.save();
+
+    context.translate(canvas.width, 0);
+    context.scale(-1, 1);
+
     context.drawImage(
       video,
       0,
@@ -119,10 +273,14 @@ export default function AttendancePage() {
       canvas.height
     );
 
+    context.restore();
+
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          setError("Unable to create check-out photo.");
+          setError(
+            "Unable to create check-out photo."
+          );
           return;
         }
 
@@ -131,7 +289,11 @@ export default function AttendancePage() {
         }
 
         setPhotoBlob(blob);
-        setPhotoPreview(URL.createObjectURL(blob));
+        setPhotoPreview(
+          URL.createObjectURL(blob)
+        );
+
+        stopCamera();
       },
       "image/jpeg",
       0.9
@@ -146,13 +308,18 @@ export default function AttendancePage() {
     setPhotoBlob(null);
     setPhotoPreview(null);
     setError("");
+    setCameraError("");
+
+    void startCamera();
   };
 
   const enableLocation = () => {
     setError("");
 
     if (!navigator.geolocation) {
-      setError("Location is not supported on this device.");
+      setError(
+        "Location is not supported on this device."
+      );
       return;
     }
 
@@ -204,7 +371,9 @@ export default function AttendancePage() {
     }
 
     if (!photoBlob) {
-      setError("Check-Out photo is compulsory.");
+      setError(
+        "Check-Out photo is compulsory."
+      );
       return;
     }
 
@@ -213,9 +382,21 @@ export default function AttendancePage() {
     try {
       const formData = new FormData();
 
-      formData.append("name", name.trim());
-      formData.append("department", department.trim());
-      formData.append("password", password);
+      formData.append(
+        "name",
+        name.trim()
+      );
+
+      formData.append(
+        "department",
+        department.trim()
+      );
+
+      formData.append(
+        "password",
+        password
+      );
+
       formData.append(
         "photo",
         photoBlob,
@@ -298,7 +479,8 @@ export default function AttendancePage() {
           outline: none;
           border-color: #ff8a3d;
           background: #211914;
-          box-shadow: 0 8px 30px rgba(255, 138, 61, 0.06);
+          box-shadow:
+            0 8px 30px rgba(255, 138, 61, 0.06);
         }
 
         .exit-button {
@@ -309,7 +491,8 @@ export default function AttendancePage() {
 
         .exit-button:hover {
           transform: translateY(-2px);
-          box-shadow: 0 14px 40px rgba(255, 138, 61, 0.18);
+          box-shadow:
+            0 14px 40px rgba(255, 138, 61, 0.18);
         }
 
         .camera-stage {
@@ -358,15 +541,34 @@ export default function AttendancePage() {
           );
         }
 
+        .face-frame {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 180px;
+          height: 230px;
+          transform: translate(-50%, -50%);
+          border: 1px solid rgba(255, 138, 61, 0.55);
+          border-radius: 48% 48% 45% 45%;
+          pointer-events: none;
+          z-index: 4;
+          box-shadow:
+            0 0 30px rgba(255, 138, 61, 0.08);
+        }
+
         @media (max-width: 700px) {
           .exit-grid {
             background-size: 34px 34px;
+          }
+
+          .face-frame {
+            width: 145px;
+            height: 190px;
           }
         }
       `}</style>
 
       <div className="exit-grid min-h-screen">
-        {/* HEADER */}
         <header className="border-b border-white/10">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 md:px-10">
             <div>
@@ -389,7 +591,6 @@ export default function AttendancePage() {
           </div>
         </header>
 
-        {/* HERO */}
         <section className="mx-auto max-w-7xl px-5 pb-12 pt-12 md:px-10 md:pt-16">
           <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
             <div>
@@ -449,7 +650,6 @@ export default function AttendancePage() {
           onSubmit={handleSubmit}
           className="mx-auto max-w-7xl px-5 pb-20 md:px-10"
         >
-          {/* IDENTITY STRIP */}
           <section className="border border-white/10 bg-[#100d0a]/90">
             <div className="border-b border-white/10 px-6 py-5 md:px-8">
               <div className="flex items-center justify-between">
@@ -520,7 +720,6 @@ export default function AttendancePage() {
             </div>
           </section>
 
-          {/* PHOTO */}
           <section className="mt-6 grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
             <div className="border border-white/10 bg-[#100d0a]/90">
               <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
@@ -541,45 +740,70 @@ export default function AttendancePage() {
 
               <div className="p-6 md:p-8">
                 <div className="camera-stage aspect-video w-full border border-white/10">
-                  {photoPreview ? (
+                  <video
+                    ref={videoRef}
+                    muted
+                    autoPlay
+                    playsInline
+                    className={`h-full w-full object-cover ${
+                      photoPreview || !cameraStarted
+                        ? "opacity-0"
+                        : "opacity-100"
+                    }`}
+                  />
+
+                  {photoPreview && (
                     <img
                       src={photoPreview}
                       alt="Check-out attendance preview"
-                      className="h-full w-full object-cover"
+                      className="absolute inset-0 h-full w-full object-cover"
                     />
-                  ) : cameraStarted ? (
-                    <video
-                      ref={videoRef}
-                      muted
-                      playsInline
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-                      <div className="mb-5 flex h-16 w-16 items-center justify-center border border-[#ff8a3d]/40 text-2xl text-[#ff8a3d]">
-                        ↘
-                      </div>
-
-                      <p className="text-xs font-black uppercase tracking-[0.2em]">
-                        Departure image
-                      </p>
-
-                      <p className="mt-3 max-w-sm text-xs leading-6 text-white/30">
-                        Capture one final live image before
-                        closing the workday session.
-                      </p>
-                    </div>
                   )}
 
-                  {cameraStarted && !photoPreview && (
-                    <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-                      <span className="bg-black/70 px-3 py-2 text-[9px] font-bold tracking-[0.2em] text-[#ff8a3d]">
-                        ● CAMERA ACTIVE
-                      </span>
+                  {!photoPreview &&
+                    !cameraStarted && (
+                      <div className="absolute inset-0 flex h-full flex-col items-center justify-center px-8 text-center">
+                        <div className="mb-5 flex h-16 w-16 items-center justify-center border border-[#ff8a3d]/40 text-2xl text-[#ff8a3d]">
+                          ↘
+                        </div>
 
-                      <span className="bg-black/70 px-3 py-2 text-[9px] tracking-[0.15em] text-white/40">
-                        EXIT FRAME
-                      </span>
+                        <p className="text-xs font-black uppercase tracking-[0.2em]">
+                          Departure image
+                        </p>
+
+                        <p className="mt-3 max-w-sm text-xs leading-6 text-white/30">
+                          Capture one final live image before
+                          closing the workday session.
+                        </p>
+                      </div>
+                    )}
+
+                  {cameraStarted &&
+                    !photoPreview && (
+                      <>
+                        <div className="face-frame" />
+
+                        <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between">
+                          <span className="bg-black/70 px-3 py-2 text-[9px] font-bold tracking-[0.2em] text-[#ff8a3d]">
+                            ● LIVE CAMERA
+                          </span>
+
+                          <span className="bg-black/70 px-3 py-2 text-[9px] tracking-[0.15em] text-white/40">
+                            FACE FRAME
+                          </span>
+                        </div>
+                      </>
+                    )}
+
+                  {cameraLoading && (
+                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60">
+                      <div className="text-center">
+                        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-[#ff8a3d]" />
+
+                        <p className="mt-4 text-[9px] font-bold uppercase tracking-[0.2em] text-[#ff8a3d]">
+                          Starting Camera...
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -600,25 +824,38 @@ export default function AttendancePage() {
                     <button
                       type="button"
                       onClick={startCamera}
-                      className="exit-button bg-[#ff8a3d] px-5 py-4 text-xs font-black uppercase tracking-[0.15em] text-black"
+                      disabled={cameraLoading}
+                      className="exit-button bg-[#ff8a3d] px-5 py-4 text-xs font-black uppercase tracking-[0.15em] text-black disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Start Departure Camera
+                      {cameraLoading
+                        ? "Starting Camera..."
+                        : "Start Departure Camera"}
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={capturePhoto}
-                      className="exit-button bg-[#ff8a3d] px-5 py-4 text-xs font-black uppercase tracking-[0.15em] text-black"
-                    >
-                      Capture Exit Photo
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={capturePhoto}
+                        className="exit-button bg-[#ff8a3d] px-5 py-4 text-xs font-black uppercase tracking-[0.15em] text-black"
+                      >
+                        Capture Exit Photo
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={stopCamera}
+                        className="border border-white/15 px-5 py-4 text-xs font-bold uppercase tracking-[0.15em] text-white/65 hover:border-[#ff8a3d]/50 hover:text-white"
+                      >
+                        Stop Camera
+                      </button>
+                    </>
                   )}
 
                   {photoPreview && (
                     <button
                       type="button"
                       onClick={retakePhoto}
-                      className="border border-white/15 px-5 py-4 text-xs font-bold uppercase tracking-[0.15em] text-white/65 hover:border-[#ff8a3d]/50 hover:text-white"
+                      className="border border-white/15 px-5 py-4 text-xs font-bold uppercase tracking-[0.15em] text-white/65 hover:border-[#ff8a3d]/50 hover:text-white sm:col-span-2"
                     >
                       Retake Image
                     </button>
@@ -633,7 +870,6 @@ export default function AttendancePage() {
               </div>
             </div>
 
-            {/* SIDE PANEL */}
             <aside className="border border-white/10 bg-[#100d0a]/90">
               <div className="border-b border-white/10 px-6 py-5">
                 <p className="text-[9px] tracking-[0.25em] text-white/25">
@@ -680,6 +916,7 @@ export default function AttendancePage() {
                 <div className="mt-10 border-t border-white/10 pt-5">
                   <div className="flex justify-between text-[9px] uppercase tracking-[0.18em] text-white/25">
                     <span>Required</span>
+
                     <span className="text-[#ff8a3d]">
                       Identity + Photo
                     </span>
@@ -694,7 +931,6 @@ export default function AttendancePage() {
             </aside>
           </section>
 
-          {/* MESSAGE */}
           {error && (
             <div className="mt-6 border border-red-400/20 bg-red-400/5 px-6 py-5">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-300">
@@ -732,7 +968,6 @@ export default function AttendancePage() {
             </div>
           )}
 
-          {/* FINAL ACTION */}
           <div className="mt-8 flex flex-col gap-5 border-t border-white/10 pt-8 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-[9px] font-bold tracking-[0.25em] text-white/25">
