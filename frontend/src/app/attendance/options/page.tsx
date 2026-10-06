@@ -6,316 +6,408 @@ export default function AttendanceOptionsPage() {
   const router = useRouter();
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#020b1c] text-white">
+    <main className="min-h-screen bg-[#f3f1eb] text-[#111111]">
 
-      {/* Background glow */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-40 top-20 h-[500px] w-[500px] rounded-full bg-blue-600/10 blur-3xl" />
-        <div className="absolute -right-40 top-10 h-[600px] w-[600px] rounded-full bg-cyan-500/10 blur-3xl" />
-        <div className="absolute bottom-[-180px] left-1/3 h-[500px] w-[600px] rounded-full bg-blue-500/10 blur-3xl" />
+      {/* Decorative background */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+
+        <div className="absolute right-[-180px] top-[-180px] h-[520px] w-[520px] rounded-full bg-[#d8ff32]/20 blur-3xl" />
+
+        <div className="absolute bottom-[-220px] left-[-180px] h-[500px] w-[500px] rounded-full bg-black/[0.035] blur-3xl" />
+
+        <div className="absolute left-1/2 top-0 h-full w-px bg-black/[0.035]" />
+
       </div>
 
-      {/* Futuristic grid */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-20"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(0,180,255,0.16) 1px, transparent 1px), linear-gradient(90deg, rgba(0,180,255,0.16) 1px, transparent 1px)",
-          backgroundSize: "45px 45px",
-          maskImage:
-            "linear-gradient(to bottom, black, transparent 95%)",
-          WebkitMaskImage:
-            "linear-gradient(to bottom, black, transparent 95%)",
-        }}
-      />
+      <div className="relative mx-auto min-h-screen max-w-[1500px] px-5 py-5 sm:px-8 lg:px-12">
 
-      {/* Decorative circles */}
-      <div className="pointer-events-none absolute -left-48 top-1/3 h-[550px] w-[550px] rounded-full border border-cyan-400/10" />
-      <div className="pointer-events-none absolute -right-48 top-1/4 h-[600px] w-[600px] rounded-full border border-blue-400/10" />
+        {/* Top bar */}
+        <header className="flex items-center justify-between border-b-2 border-black pb-5">
 
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6 sm:px-8 lg:px-12">
+          <div className="flex items-center gap-4">
 
-        {/* Header */}
-        <header className="flex items-center justify-between">
+            <div className="flex h-12 w-12 items-center justify-center bg-black text-white">
 
-          <div className="flex items-center gap-3">
+              <span className="text-lg font-black">
+                T
+              </span>
 
-            <div className="relative flex h-12 w-12 items-center justify-center">
-              <div className="absolute inset-0 rounded-full bg-cyan-400/20 blur-md" />
-
-              <div className="relative flex h-11 w-11 items-center justify-center rounded-full border border-cyan-400/60 bg-[#071a35] shadow-[0_0_25px_rgba(0,190,255,0.2)]">
-                <span className="text-2xl">🚀</span>
-              </div>
             </div>
 
             <div>
-              <h1 className="text-lg font-extrabold tracking-[0.12em] sm:text-2xl">
-                TALENTRONAUT
-              </h1>
 
-              <p className="text-[10px] font-medium tracking-[0.38em] text-blue-200 sm:text-xs">
+              <p className="text-sm font-black tracking-[0.18em]">
+                TALENTRONAUT
+              </p>
+
+              <p className="mt-1 text-[9px] font-bold tracking-[0.28em] text-black/45">
                 PVT LTD
               </p>
+
             </div>
 
           </div>
 
-          {/* System status */}
-          <div className="flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-400/5 px-4 py-2">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+          <div className="hidden items-center gap-4 sm:flex">
+
+            <span className="text-[9px] font-bold tracking-[0.3em] text-black/40">
+              WORKFORCE PLATFORM
             </span>
 
-            <span className="text-[10px] font-bold tracking-[0.18em] text-emerald-300 sm:text-xs">
-              SYSTEM ONLINE
-            </span>
+            <span className="h-3 w-3 rounded-full bg-[#b8e600]" />
+
           </div>
 
         </header>
 
         {/* Main */}
-        <section className="flex flex-1 flex-col items-center justify-center py-10">
+        <section className="py-10 sm:py-14 lg:py-16">
 
-          {/* Section label */}
-          <div className="mb-5 flex items-center gap-4">
+          {/* Intro */}
+          <div className="grid gap-8 lg:grid-cols-[1fr_300px]">
 
-            <div className="h-px w-10 bg-cyan-400 sm:w-20" />
+            <div>
 
-            <p className="text-xs font-semibold tracking-[0.35em] text-cyan-200 sm:text-sm">
-              SMART ATTENDANCE
-            </p>
+              <div className="flex items-center gap-3">
 
-            <div className="h-px w-10 bg-cyan-400 sm:w-20" />
+                <span className="h-3 w-3 bg-[#b8e600]" />
 
-          </div>
-
-          {/* Main heading */}
-          <h2 className="text-center text-4xl font-black tracking-tight sm:text-6xl">
-            ATTENDANCE
-            <br />
-
-            <span className="bg-gradient-to-r from-blue-400 via-cyan-400 to-sky-300 bg-clip-text text-transparent">
-              CONTROL CENTER
-            </span>
-          </h2>
-
-          <p className="mt-5 max-w-xl text-center text-sm leading-6 text-blue-200 sm:text-base">
-            Select an operation below to securely manage your
-            attendance and employee services.
-          </p>
-
-          {/* Options */}
-          <div className="mt-10 grid w-full max-w-4xl gap-5 sm:grid-cols-2">
-
-            {/* CHECK IN */}
-            <button
-              type="button"
-              onClick={() => router.push("/attendance/check-in")}
-              className="group relative overflow-hidden rounded-3xl border border-cyan-400/40 bg-[#06172f]/90 p-6 text-left shadow-[0_0_30px_rgba(0,190,255,0.08)] transition duration-300 hover:-translate-y-1 hover:border-cyan-300 hover:shadow-[0_0_40px_rgba(0,190,255,0.22)]"
-            >
-              <div className="absolute right-[-35px] top-[-35px] h-32 w-32 rounded-full bg-cyan-400/10 blur-2xl transition group-hover:bg-cyan-400/20" />
-
-              <div className="relative">
-
-                <div className="mb-6 flex items-center justify-between">
-
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-cyan-400/50 bg-cyan-400/10 text-3xl">
-                    🟢
-                  </div>
-
-                  <span className="text-2xl text-cyan-300 transition group-hover:translate-x-1">
-                    →
-                  </span>
-
-                </div>
-
-                <p className="text-xs font-bold tracking-[0.25em] text-cyan-300">
-                  ATTENDANCE
-                </p>
-
-                <h3 className="mt-2 text-2xl font-black tracking-wide">
-                  CHECK IN
-                </h3>
-
-                <p className="mt-3 text-sm leading-6 text-blue-200">
-                  Start your workday and record your attendance securely.
-                </p>
-
-                <div className="mt-6 h-px bg-gradient-to-r from-cyan-400/50 to-transparent" />
-
-                <p className="mt-4 text-xs font-semibold tracking-[0.2em] text-cyan-200">
-                  START SESSION
-                </p>
+                <span className="text-[10px] font-black tracking-[0.35em]">
+                  ATTENDANCE / CONTROL
+                </span>
 
               </div>
-            </button>
 
-            {/* CHECK OUT */}
-            <button
-              type="button"
-              onClick={() => router.push("/attendance")}
-              className="group relative overflow-hidden rounded-3xl border border-blue-400/40 bg-[#06172f]/90 p-6 text-left shadow-[0_0_30px_rgba(0,130,255,0.08)] transition duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-[0_0_40px_rgba(0,130,255,0.22)]"
-            >
-              <div className="absolute right-[-35px] top-[-35px] h-32 w-32 rounded-full bg-blue-400/10 blur-2xl transition group-hover:bg-blue-400/20" />
+              <h1 className="mt-8 max-w-5xl text-[58px] font-black leading-[0.82] tracking-[-0.075em] sm:text-[90px] lg:text-[125px]">
 
-              <div className="relative">
+                MAKE
+                <br />
 
-                <div className="mb-6 flex items-center justify-between">
+                <span className="text-black/15">
+                  YOUR
+                </span>
 
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-blue-400/50 bg-blue-400/10 text-3xl">
-                    🔵
-                  </div>
+                <br />
 
-                  <span className="text-2xl text-blue-300 transition group-hover:translate-x-1">
-                    →
-                  </span>
+                MOVE.
 
-                </div>
-
-                <p className="text-xs font-bold tracking-[0.25em] text-blue-300">
-                  ATTENDANCE
-                </p>
-
-                <h3 className="mt-2 text-2xl font-black tracking-wide">
-                  CHECK OUT
-                </h3>
-
-                <p className="mt-3 text-sm leading-6 text-blue-200">
-                  Complete your workday and securely record your exit time.
-                </p>
-
-                <div className="mt-6 h-px bg-gradient-to-r from-blue-400/50 to-transparent" />
-
-                <p className="mt-4 text-xs font-semibold tracking-[0.2em] text-blue-200">
-                  END SESSION
-                </p>
-
-              </div>
-            </button>
-
-            {/* REGISTER */}
-            <button
-              type="button"
-              onClick={() => router.push("/employees")}
-              className="group relative overflow-hidden rounded-3xl border border-purple-400/30 bg-[#06172f]/90 p-6 text-left shadow-[0_0_30px_rgba(150,80,255,0.06)] transition duration-300 hover:-translate-y-1 hover:border-purple-300/70 hover:shadow-[0_0_40px_rgba(150,80,255,0.18)]"
-            >
-              <div className="absolute right-[-35px] top-[-35px] h-32 w-32 rounded-full bg-purple-400/10 blur-2xl transition group-hover:bg-purple-400/20" />
-
-              <div className="relative">
-
-                <div className="mb-6 flex items-center justify-between">
-
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-purple-400/40 bg-purple-400/10 text-3xl">
-                    👤
-                  </div>
-
-                  <span className="text-2xl text-purple-300 transition group-hover:translate-x-1">
-                    →
-                  </span>
-
-                </div>
-
-                <p className="text-xs font-bold tracking-[0.25em] text-purple-300">
-                  EMPLOYEE SERVICES
-                </p>
-
-                <h3 className="mt-2 text-2xl font-black tracking-wide">
-                  REGISTER
-                </h3>
-
-                <p className="mt-3 text-sm leading-6 text-blue-200">
-                  Register a new employee with secure identity information.
-                </p>
-
-                <div className="mt-6 h-px bg-gradient-to-r from-purple-400/50 to-transparent" />
-
-                <p className="mt-4 text-xs font-semibold tracking-[0.2em] text-purple-200">
-                  NEW EMPLOYEE
-                </p>
-
-              </div>
-            </button>
-
-            {/* ADMIN */}
-            <button
-              type="button"
-              onClick={() => router.push("/admin-login")}
-              className="group relative overflow-hidden rounded-3xl border border-amber-400/30 bg-[#06172f]/90 p-6 text-left shadow-[0_0_30px_rgba(255,180,0,0.05)] transition duration-300 hover:-translate-y-1 hover:border-amber-300/70 hover:shadow-[0_0_40px_rgba(255,180,0,0.16)]"
-            >
-              <div className="absolute right-[-35px] top-[-35px] h-32 w-32 rounded-full bg-amber-400/10 blur-2xl transition group-hover:bg-amber-400/20" />
-
-              <div className="relative">
-
-                <div className="mb-6 flex items-center justify-between">
-
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-amber-400/40 bg-amber-400/10 text-3xl">
-                    🛡️
-                  </div>
-
-                  <span className="text-2xl text-amber-300 transition group-hover:translate-x-1">
-                    →
-                  </span>
-
-                </div>
-
-                <p className="text-xs font-bold tracking-[0.25em] text-amber-300">
-                  MANAGEMENT
-                </p>
-
-                <h3 className="mt-2 text-2xl font-black tracking-wide">
-                  ADMIN CENTER
-                </h3>
-
-                <p className="mt-3 text-sm leading-6 text-blue-200">
-                  Access employee records and attendance analytics.
-                </p>
-
-                <div className="mt-6 h-px bg-gradient-to-r from-amber-400/50 to-transparent" />
-
-                <p className="mt-4 text-xs font-semibold tracking-[0.2em] text-amber-200">
-                  ADMIN ACCESS
-                </p>
-
-              </div>
-            </button>
-
-          </div>
-
-          {/* Bottom system indicator */}
-          <div className="mt-10 flex w-full max-w-4xl items-center gap-4">
-
-            <div className="h-px flex-1 bg-gradient-to-r from-transparent to-cyan-400/50" />
-
-            <div className="flex items-center gap-3">
-
-              <span className="relative flex h-3 w-3">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
-                <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-400" />
-              </span>
-
-              <span className="text-[10px] font-bold tracking-[0.25em] text-emerald-300 sm:text-xs">
-                SECURE SYSTEM READY
-              </span>
+              </h1>
 
             </div>
 
-            <div className="h-px flex-1 bg-gradient-to-l from-transparent to-cyan-400/50" />
+            {/* Right information */}
+            <div className="flex flex-col justify-end">
+
+              <div className="border-l-2 border-black pl-5">
+
+                <p className="text-[9px] font-black tracking-[0.3em] text-black/40">
+                  SMART ATTENDANCE
+                </p>
+
+                <p className="mt-4 text-sm font-medium leading-7 text-black/60">
+                  Choose how you want to begin or finish
+                  your workday.
+                </p>
+
+              </div>
+
+              <div className="mt-8 flex items-center gap-3">
+
+                <span className="h-2 w-2 rounded-full bg-[#b8e600]" />
+
+                <span className="text-[9px] font-black tracking-[0.25em]">
+                  SYSTEM READY
+                </span>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* Main action board */}
+          <div className="mt-12 grid gap-4 lg:grid-cols-12">
+
+            {/* Check In */}
+            <button
+              type="button"
+              onClick={() =>
+                router.push("/attendance/check-in")
+              }
+              className="group relative overflow-hidden border-2 border-black bg-black p-7 text-left text-white transition duration-500 hover:-translate-y-2 sm:p-10 lg:col-span-7"
+            >
+
+              {/* Large number */}
+              <span className="pointer-events-none absolute right-[-15px] top-[-45px] text-[190px] font-black leading-none tracking-[-0.12em] text-white/[0.045]">
+                01
+              </span>
+
+              {/* Accent block */}
+              <div className="absolute bottom-0 right-0 h-28 w-28 bg-[#b8e600] transition duration-500 group-hover:h-36 group-hover:w-36" />
+
+              <div className="relative flex min-h-[430px] flex-col justify-between">
+
+                <div>
+
+                  <div className="flex items-center justify-between">
+
+                    <div className="flex h-14 w-14 items-center justify-center border border-white/20 bg-white/5">
+
+                      <span className="text-2xl font-light">
+                        ↗
+                      </span>
+
+                    </div>
+
+                    <span className="text-[9px] font-bold tracking-[0.3em] text-white/30">
+                      START
+                    </span>
+
+                  </div>
+
+                  <div className="mt-20">
+
+                    <p className="text-[10px] font-black tracking-[0.35em] text-[#b8e600]">
+                      BEGIN WORKDAY
+                    </p>
+
+                    <h2 className="mt-4 text-5xl font-black tracking-[-0.06em] sm:text-7xl">
+                      CHECK
+                      <br />
+                      IN
+                    </h2>
+
+                  </div>
+
+                </div>
+
+                <div className="flex items-end justify-between">
+
+                  <p className="max-w-xs text-xs leading-6 text-white/45">
+                    Verify your identity and record
+                    the beginning of your workday.
+                  </p>
+
+                  <span className="relative z-10 flex h-14 w-14 items-center justify-center text-2xl font-black text-black transition duration-300 group-hover:rotate-45">
+                    →
+                  </span>
+
+                </div>
+
+              </div>
+
+            </button>
+
+            {/* Check Out */}
+            <button
+              type="button"
+              onClick={() =>
+                router.push("/attendance")
+              }
+              className="group relative overflow-hidden border-2 border-black bg-[#e9e6dd] p-7 text-left transition duration-500 hover:-translate-y-2 sm:p-10 lg:col-span-5"
+            >
+
+              <span className="pointer-events-none absolute right-[-10px] top-[-40px] text-[170px] font-black leading-none tracking-[-0.12em] text-black/[0.045]">
+                02
+              </span>
+
+              <div className="relative flex min-h-[430px] flex-col justify-between">
+
+                <div>
+
+                  <div className="flex items-center justify-between">
+
+                    <div className="flex h-14 w-14 items-center justify-center border-2 border-black bg-transparent">
+
+                      <span className="text-2xl font-light">
+                        ↙
+                      </span>
+
+                    </div>
+
+                    <span className="text-[9px] font-bold tracking-[0.3em] text-black/30">
+                      FINISH
+                    </span>
+
+                  </div>
+
+                  <div className="mt-20">
+
+                    <p className="text-[10px] font-black tracking-[0.35em] text-black/40">
+                      END WORKDAY
+                    </p>
+
+                    <h2 className="mt-4 text-5xl font-black tracking-[-0.06em] sm:text-6xl">
+                      CHECK
+                      <br />
+                      OUT
+                    </h2>
+
+                  </div>
+
+                </div>
+
+                <div className="flex items-end justify-between">
+
+                  <p className="max-w-xs text-xs leading-6 text-black/45">
+                    Complete your attendance session
+                    and record your departure.
+                  </p>
+
+                  <span className="flex h-14 w-14 items-center justify-center text-2xl font-black transition duration-300 group-hover:translate-x-2">
+                    →
+                  </span>
+
+                </div>
+
+              </div>
+
+            </button>
+
+          </div>
+
+          {/* Secondary operations */}
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+
+            {/* Register */}
+            <button
+              type="button"
+              onClick={() =>
+                router.push("/employees")
+              }
+              className="group flex min-h-[150px] items-center justify-between border-2 border-black bg-white p-6 text-left transition duration-300 hover:bg-[#b8e600] sm:p-8"
+            >
+
+              <div className="flex items-center gap-5">
+
+                <div className="flex h-14 w-14 items-center justify-center border-2 border-black">
+
+                  <span className="text-2xl font-light">
+                    +
+                  </span>
+
+                </div>
+
+                <div>
+
+                  <p className="text-[9px] font-black tracking-[0.3em] text-black/40">
+                    WORKFORCE
+                  </p>
+
+                  <h3 className="mt-2 text-2xl font-black tracking-[-0.04em]">
+                    REGISTER EMPLOYEE
+                  </h3>
+
+                  <p className="mt-1 text-xs text-black/45">
+                    Add a new employee to the platform.
+                  </p>
+
+                </div>
+
+              </div>
+
+              <span className="text-2xl font-black transition duration-300 group-hover:translate-x-2">
+                →
+              </span>
+
+            </button>
+
+            {/* Admin */}
+            <button
+              type="button"
+              onClick={() =>
+                router.push("/admin-login")
+              }
+              className="group flex min-h-[150px] items-center justify-between border-2 border-black bg-[#d8ff32] p-6 text-left transition duration-300 hover:bg-black hover:text-white sm:p-8"
+            >
+
+              <div className="flex items-center gap-5">
+
+                <div className="flex h-14 w-14 items-center justify-center border-2 border-black bg-black text-white group-hover:border-white">
+
+                  <span className="text-xl">
+                    ◉
+                  </span>
+
+                </div>
+
+                <div>
+
+                  <p className="text-[9px] font-black tracking-[0.3em] opacity-50">
+                    MANAGEMENT
+                  </p>
+
+                  <h3 className="mt-2 text-2xl font-black tracking-[-0.04em]">
+                    ADMIN CENTER
+                  </h3>
+
+                  <p className="mt-1 text-xs opacity-50">
+                    Employees • Attendance • Analytics
+                  </p>
+
+                </div>
+
+              </div>
+
+              <span className="text-2xl font-black transition duration-300 group-hover:translate-x-2">
+                →
+              </span>
+
+            </button>
+
+          </div>
+
+          {/* Bottom status */}
+          <div className="mt-10 grid gap-4 border-t-2 border-black pt-5 sm:grid-cols-3">
+
+            <div>
+
+              <p className="text-[9px] font-black tracking-[0.3em] text-black/35">
+                PLATFORM
+              </p>
+
+              <p className="mt-2 text-xs font-black">
+                SMART ATTENDANCE
+              </p>
+
+            </div>
+
+            <div>
+
+              <p className="text-[9px] font-black tracking-[0.3em] text-black/35">
+                STATUS
+              </p>
+
+              <div className="mt-2 flex items-center gap-2">
+
+                <span className="h-2 w-2 rounded-full bg-[#8db500]" />
+
+                <p className="text-xs font-black">
+                  OPERATIONAL
+                </p>
+
+              </div>
+
+            </div>
+
+            <div className="sm:text-right">
+
+              <p className="text-[9px] font-black tracking-[0.3em] text-black/35">
+                ORGANIZATION
+              </p>
+
+              <p className="mt-2 text-xs font-black">
+                TALENTRONAUT PVT LTD
+              </p>
+
+            </div>
 
           </div>
 
         </section>
 
-        {/* Footer */}
-        <footer className="border-t border-blue-400/10 py-5 text-center">
-
-          <p className="text-[10px] font-semibold tracking-[0.3em] text-blue-300 sm:text-xs">
-            TALENTRONAUT PVT LTD • SMART ATTENDANCE PLATFORM
-          </p>
-
-        </footer>
-
       </div>
+
     </main>
   );
 }
