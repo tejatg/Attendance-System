@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -6,7 +7,7 @@ const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://attendance-backend-2nky.onrender.com";
 
-export default function CheckInPage() {
+export default function AttendancePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -15,17 +16,8 @@ export default function CheckInPage() {
   const [preview, setPreview] = useState("");
   const [cameraLoading, setCameraLoading] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
-  const stopCamera = () => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-  };
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     return () => {
@@ -39,6 +31,15 @@ export default function CheckInPage() {
     };
   }, [preview]);
 
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
   const startCamera = async () => {
     setError("");
     setMessage("");
@@ -46,6 +47,10 @@ export default function CheckInPage() {
 
     try {
       stopCamera();
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Camera is not supported by this browser.");
+      }
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user" },
@@ -55,15 +60,15 @@ export default function CheckInPage() {
       streamRef.current = stream;
 
       if (!videoRef.current) {
-        stopCamera();
-        throw new Error("Camera preview is unavailable.");
+        throw new Error("Camera preview is unavailable. Please try again.");
       }
 
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
     } catch (err) {
+      stopCamera();
       setError(
-        err instanceof Error ? err.message : "Unable to open the camera."
+        err instanceof Error ? err.message : "Unable to start the camera."
       );
     } finally {
       setCameraLoading(false);
@@ -74,7 +79,7 @@ export default function CheckInPage() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    if (!video || !canvas || !video.videoWidth) {
+    if (!video || !canvas || video.videoWidth === 0) {
       setError("Start the camera and wait for the preview.");
       return;
     }
@@ -94,14 +99,14 @@ export default function CheckInPage() {
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          setError("Unable to create the attendance photo.");
+          setError("Unable to create the check-out photo.");
           return;
         }
 
         setPhoto(blob);
         setPreview(URL.createObjectURL(blob));
-        setError("");
         stopCamera();
+        setError("");
       },
       "image/jpeg",
       0.9
@@ -111,37 +116,41 @@ export default function CheckInPage() {
   const retakePhoto = () => {
     setPhoto(null);
     setPreview("");
-    setMessage("");
     setError("");
+    setMessage("");
     void startCamera();
   };
 
   const handleSubmit = async () => {
+    setError("");
+    setMessage("");
+
     if (!photo) {
-      setError("Please capture your attendance photo first.");
+      setError("Please capture a photo before checking out.");
       return;
     }
 
     setLoading(true);
-    setError("");
-    setMessage("");
 
     try {
       const formData = new FormData();
-      formData.append("photo", photo, "check-in-photo.jpg");
+      formData.append("photo", photo, "check-out-photo.jpg");
 
-      const response = await fetch(`${API_BASE}/api/attendance`, {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        `${API_BASE}/api/attendance/checkout`,
+        {
+          method: "PUT",
+          body: formData,
+        }
+      );
 
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data?.message || "Unable to complete check-in.");
+        throw new Error(data?.message || "Unable to complete check-out.");
       }
 
-      setMessage(data?.message || "Check-in completed successfully.");
+      setMessage(data?.message || "Check-out completed successfully.");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Something went wrong."
@@ -153,15 +162,15 @@ export default function CheckInPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col items-center gap-5 p-6 text-center">
-      <h1 className="text-2xl font-bold">Attendance Check-In</h1>
+      <h1 className="text-2xl font-bold">Attendance Check-Out</h1>
 
-      <p>Capture a photo to mark your attendance.</p>
+      <p>Capture your photo to close your attendance session.</p>
 
       <div className="w-full overflow-hidden rounded-lg border">
         {preview ? (
           <img
             src={preview}
-            alt="Attendance photo"
+            alt="Check-out photo preview"
             className="aspect-video w-full object-cover"
           />
         ) : (
@@ -183,9 +192,9 @@ export default function CheckInPage() {
             type="button"
             onClick={startCamera}
             disabled={cameraLoading}
-            className="w-full rounded bg-blue-600 px-4 py-3 text-white disabled:opacity-50"
+            className="w-full rounded bg-orange-500 px-4 py-3 font-semibold text-black disabled:opacity-50"
           >
-            {cameraLoading ? "Opening Camera..." : "Activate Camera"}
+            {cameraLoading ? "Starting Camera..." : "Start Camera"}
           </button>
 
           <button
@@ -210,15 +219,15 @@ export default function CheckInPage() {
             type="button"
             onClick={handleSubmit}
             disabled={loading}
-            className="w-full rounded bg-green-600 px-4 py-3 text-white disabled:opacity-50"
+            className="w-full rounded bg-green-600 px-4 py-3 font-semibold text-white disabled:opacity-50"
           >
-            {loading ? "Submitting..." : "Confirm Check-In"}
+            {loading ? "Checking Out..." : "Confirm Check-Out"}
           </button>
         </>
       )}
 
-      {error && <p className="text-red-600">{error}</p>}
-      {message && <p className="text-green-700">{message}</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {message && <p className="text-sm text-green-700">{message}</p>}
     </main>
   );
 }
