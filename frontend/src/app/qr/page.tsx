@@ -27,16 +27,9 @@ export default function QRPage() {
         {ATTENDANCE_URL}
       </p>
 
-      <a
-        href={ATTENDANCE_URL}
-        className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
-      >
-        Open Attendance Page
-      </a>
-
       <p className="max-w-md text-sm text-gray-500">
-        Scan the QR code using your mobile phone camera. You need an
-        internet connection to open the public attendance page.
+        Scan this QR code with your mobile phone camera to open the
+        attendance page.
       </p>
     </main>
   );
