@@ -1,10 +1,16 @@
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://attendance-backend-2nky.onrender.com";
+import AttendanceCamera from "@/components/AttendanceCamera";
+import Button from "@/components/Button";
+import ErrorMessage from "@/components/ErrorMessage";
+import Loading from "@/components/Loading";
+import { apiRequest } from "@/util/api";
+import {
+  getApiErrorMessage,
+  getErrorMessage,
+} from "@/util/error";
 
 export default function CheckInPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -15,17 +21,17 @@ export default function CheckInPage() {
   const [preview, setPreview] = useState("");
   const [cameraLoading, setCameraLoading] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-  const stopCamera = () => {
+  function stopCamera() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
 
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-  };
+  }
 
   useEffect(() => {
     return () => {
@@ -39,13 +45,19 @@ export default function CheckInPage() {
     };
   }, [preview]);
 
-  const startCamera = async () => {
+  async function startCamera() {
     setError("");
     setMessage("");
     setCameraLoading(true);
 
     try {
       stopCamera();
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(
+          "Camera is unavailable. Use HTTPS or localhost and allow camera access."
+        );
+      }
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user" },
@@ -62,19 +74,18 @@ export default function CheckInPage() {
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Unable to open the camera."
-      );
+      stopCamera();
+      setError(getErrorMessage(err));
     } finally {
       setCameraLoading(false);
     }
-  };
+  }
 
-  const capturePhoto = () => {
+  function capturePhoto() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    if (!video || !canvas || !video.videoWidth) {
+    if (!video || !canvas || video.videoWidth === 0) {
       setError("Start the camera and wait for the preview.");
       return;
     }
@@ -106,17 +117,17 @@ export default function CheckInPage() {
       "image/jpeg",
       0.9
     );
-  };
+  }
 
-  const retakePhoto = () => {
+  function retakePhoto() {
     setPhoto(null);
     setPreview("");
-    setMessage("");
     setError("");
+    setMessage("");
     void startCamera();
-  };
+  }
 
-  const handleSubmit = async () => {
+  async function handleSubmit() {
     if (!photo) {
       setError("Please capture your attendance photo first.");
       return;
@@ -130,95 +141,82 @@ export default function CheckInPage() {
       const formData = new FormData();
       formData.append("photo", photo, "check-in-photo.jpg");
 
-      const response = await fetch(`${API_BASE}/api/attendance`, {
+      const response = await apiRequest("/api/attendance", {
         method: "POST",
         body: formData,
       });
 
-      const data = await response.json().catch(() => ({}));
-
       if (!response.ok) {
-        throw new Error(data?.message || "Unable to complete check-in.");
+        throw new Error(await getApiErrorMessage(response));
       }
 
+      const data = await response.json().catch(() => ({}));
       setMessage(data?.message || "Check-in completed successfully.");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Something went wrong."
-      );
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center gap-5 p-6 text-center">
+    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center gap-5 p-6 text-center text-gray-900">
       <h1 className="text-2xl font-bold">Attendance Check-In</h1>
-
       <p>Capture a photo to mark your attendance.</p>
 
-      <div className="w-full overflow-hidden rounded-lg border">
-        {preview ? (
-          <img
-            src={preview}
-            alt="Attendance photo"
-            className="aspect-video w-full object-cover"
-          />
-        ) : (
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="aspect-video w-full object-cover"
-          />
-        )}
-      </div>
-
+      <AttendanceCamera videoRef={videoRef} preview={preview} />
       <canvas ref={canvasRef} className="hidden" />
+
+      {cameraLoading && (
+        <Loading message="Opening camera..." />
+      )}
 
       {!preview ? (
         <>
-          <button
-            type="button"
+          <Button
             onClick={startCamera}
-            disabled={cameraLoading}
-            className="w-full rounded bg-blue-600 px-4 py-3 text-white disabled:opacity-50"
+            loading={cameraLoading}
+            loadingText="Opening Camera..."
+            className="bg-blue-600 text-white"
           >
-            {cameraLoading ? "Opening Camera..." : "Activate Camera"}
-          </button>
+            Activate Camera
+          </Button>
 
-          <button
-            type="button"
+          <Button
             onClick={capturePhoto}
-            className="w-full rounded border px-4 py-3"
+            className="border border-gray-300"
           >
             Capture Photo
-          </button>
+          </Button>
         </>
       ) : (
         <>
-          <button
-            type="button"
+          <Button
             onClick={retakePhoto}
-            className="w-full rounded border px-4 py-3"
+            className="border border-gray-300"
           >
             Retake Photo
-          </button>
+          </Button>
 
-          <button
-            type="button"
+          <Button
             onClick={handleSubmit}
-            disabled={loading}
-            className="w-full rounded bg-green-600 px-4 py-3 text-white disabled:opacity-50"
+            loading={loading}
+            loadingText="Submitting..."
+            className="bg-green-600 text-white"
           >
-            {loading ? "Submitting..." : "Confirm Check-In"}
-          </button>
+            Confirm Check-In
+          </Button>
         </>
       )}
 
-      {error && <p className="text-red-600">{error}</p>}
-      {message && <p className="text-green-700">{message}</p>}
+      {loading && <Loading message="Submitting attendance..." />}
+      <ErrorMessage message={error} />
+
+      {message && (
+        <p role="status" className="text-sm text-green-700">
+          {message}
+        </p>
+      )}
     </main>
   );
 }
