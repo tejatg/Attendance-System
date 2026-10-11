@@ -16,6 +16,7 @@ export default function CheckInPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const previewRef = useRef<string>("");
 
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [preview, setPreview] = useState("");
@@ -33,19 +34,28 @@ export default function CheckInPage() {
     }
   }
 
+  function updatePreview(url: string) {
+    if (previewRef.current) {
+      URL.revokeObjectURL(previewRef.current);
+    }
+
+    previewRef.current = url;
+    setPreview(url);
+  }
+
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
+
+      if (previewRef.current) {
+        URL.revokeObjectURL(previewRef.current);
+      }
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (preview) URL.revokeObjectURL(preview);
-    };
-  }, [preview]);
-
   async function startCamera() {
+    if (cameraLoading || loading) return;
+
     setError("");
     setMessage("");
     setCameraLoading(true);
@@ -82,6 +92,8 @@ export default function CheckInPage() {
   }
 
   function capturePhoto() {
+    if (loading || cameraLoading) return;
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
@@ -110,8 +122,9 @@ export default function CheckInPage() {
         }
 
         setPhoto(blob);
-        setPreview(URL.createObjectURL(blob));
+        updatePreview(URL.createObjectURL(blob));
         setError("");
+        setMessage("");
         stopCamera();
       },
       "image/jpeg",
@@ -120,14 +133,18 @@ export default function CheckInPage() {
   }
 
   function retakePhoto() {
+    if (loading || cameraLoading) return;
+
     setPhoto(null);
-    setPreview("");
+    updatePreview("");
     setError("");
     setMessage("");
     void startCamera();
   }
 
   async function handleSubmit() {
+    if (loading) return;
+
     if (!photo) {
       setError("Please capture your attendance photo first.");
       return;
@@ -151,7 +168,10 @@ export default function CheckInPage() {
       }
 
       const data = await response.json().catch(() => ({}));
-      setMessage(data?.message || "Check-in completed successfully.");
+
+      setMessage(
+        data?.message || "Check-in completed successfully."
+      );
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -160,22 +180,23 @@ export default function CheckInPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center gap-5 p-6 text-center text-gray-900">
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center gap-5 p-6 text-center text-gray-900">
       <h1 className="text-2xl font-bold">Attendance Check-In</h1>
+
       <p>Capture a photo to mark your attendance.</p>
 
       <AttendanceCamera videoRef={videoRef} preview={preview} />
+
       <canvas ref={canvasRef} className="hidden" />
 
-      {cameraLoading && (
-        <Loading message="Opening camera..." />
-      )}
+      {cameraLoading && <Loading message="Opening camera..." />}
 
       {!preview ? (
         <>
           <Button
             onClick={startCamera}
             loading={cameraLoading}
+            disabled={loading}
             loadingText="Opening Camera..."
             className="bg-blue-600 text-white"
           >
@@ -184,6 +205,7 @@ export default function CheckInPage() {
 
           <Button
             onClick={capturePhoto}
+            disabled={cameraLoading || loading}
             className="border border-gray-300"
           >
             Capture Photo
@@ -193,6 +215,7 @@ export default function CheckInPage() {
         <>
           <Button
             onClick={retakePhoto}
+            disabled={loading || cameraLoading}
             className="border border-gray-300"
           >
             Retake Photo
@@ -210,6 +233,7 @@ export default function CheckInPage() {
       )}
 
       {loading && <Loading message="Submitting attendance..." />}
+
       <ErrorMessage message={error} />
 
       {message && (

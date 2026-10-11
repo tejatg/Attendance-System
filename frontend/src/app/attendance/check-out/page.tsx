@@ -16,6 +16,7 @@ export default function CheckOutPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const previewRef = useRef("");
 
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [preview, setPreview] = useState("");
@@ -33,19 +34,28 @@ export default function CheckOutPage() {
     }
   }
 
+  function updatePreview(url: string) {
+    if (previewRef.current) {
+      URL.revokeObjectURL(previewRef.current);
+    }
+
+    previewRef.current = url;
+    setPreview(url);
+  }
+
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
+
+      if (previewRef.current) {
+        URL.revokeObjectURL(previewRef.current);
+      }
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (preview) URL.revokeObjectURL(preview);
-    };
-  }, [preview]);
-
   async function startCamera() {
+    if (cameraLoading || loading) return;
+
     setError("");
     setMessage("");
     setCameraLoading(true);
@@ -82,6 +92,8 @@ export default function CheckOutPage() {
   }
 
   function capturePhoto() {
+    if (loading || cameraLoading) return;
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
@@ -110,8 +122,9 @@ export default function CheckOutPage() {
         }
 
         setPhoto(blob);
-        setPreview(URL.createObjectURL(blob));
+        updatePreview(URL.createObjectURL(blob));
         setError("");
+        setMessage("");
         stopCamera();
       },
       "image/jpeg",
@@ -120,14 +133,18 @@ export default function CheckOutPage() {
   }
 
   function retakePhoto() {
+    if (loading || cameraLoading) return;
+
     setPhoto(null);
-    setPreview("");
+    updatePreview("");
     setError("");
     setMessage("");
     void startCamera();
   }
 
   async function handleSubmit() {
+    if (loading) return;
+
     if (!photo) {
       setError("Please capture a photo before checking out.");
       return;
@@ -154,7 +171,10 @@ export default function CheckOutPage() {
       }
 
       const data = await response.json().catch(() => ({}));
-      setMessage(data?.message || "Check-out completed successfully.");
+
+      setMessage(
+        data?.message || "Check-out completed successfully."
+      );
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -163,22 +183,23 @@ export default function CheckOutPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center gap-5 p-6 text-center text-gray-900">
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center gap-5 p-6 text-center text-gray-900">
       <h1 className="text-2xl font-bold">Attendance Check-Out</h1>
+
       <p>Capture your photo to close your attendance session.</p>
 
       <AttendanceCamera videoRef={videoRef} preview={preview} />
+
       <canvas ref={canvasRef} className="hidden" />
 
-      {cameraLoading && (
-        <Loading message="Opening camera..." />
-      )}
+      {cameraLoading && <Loading message="Opening camera..." />}
 
       {!preview ? (
         <>
           <Button
             onClick={startCamera}
             loading={cameraLoading}
+            disabled={loading}
             loadingText="Opening Camera..."
             className="bg-orange-500 text-black"
           >
@@ -187,6 +208,7 @@ export default function CheckOutPage() {
 
           <Button
             onClick={capturePhoto}
+            disabled={cameraLoading || loading}
             className="border border-gray-300"
           >
             Capture Photo
@@ -196,6 +218,7 @@ export default function CheckOutPage() {
         <>
           <Button
             onClick={retakePhoto}
+            disabled={loading || cameraLoading}
             className="border border-gray-300"
           >
             Retake Photo
@@ -213,6 +236,7 @@ export default function CheckOutPage() {
       )}
 
       {loading && <Loading message="Submitting check-out..." />}
+
       <ErrorMessage message={error} />
 
       {message && (
