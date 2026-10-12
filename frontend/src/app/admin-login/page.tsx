@@ -1,195 +1,182 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-const API_BASE_URL =
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "https://attendance-backend-2nky.onrender.com";
+  "https://attendance-backend-2nky.onrender.com"
+).replace(/\/+$/, "");
+
+type AdminUser = {
+  id?: number;
+  username?: string;
+  name?: string | null;
+  role?: string;
+  isActive?: boolean;
+};
 
 export default function AdminLoginPage() {
   const router = useRouter();
 
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const existingToken =
-      localStorage.getItem("adminToken");
-
-    if (!existingToken) {
-      return;
-    }
+    let cancelled = false;
 
     async function verifyExistingSession() {
+      const token = localStorage.getItem("adminToken");
+
+      if (!token) {
+        if (!cancelled) setCheckingSession(false);
+        return;
+      }
+
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/api/admin/me`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${existingToken}`,
-            },
-            cache: "no-store",
-          }
-        );
+        const response = await fetch(`${API_BASE_URL}/api/admin/me`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        });
 
-        if (!response.ok) {
-          localStorage.removeItem(
-            "adminToken"
-          );
+        const data = await response.json().catch(() => ({}));
 
-          localStorage.removeItem(
-            "adminUser"
-          );
-
-          return;
-        }
-
-        const data = await response.json();
+        if (cancelled) return;
 
         if (
+          response.ok &&
           data?.success &&
           data?.admin &&
           data.admin.role === "ADMIN" &&
           data.admin.isActive !== false
         ) {
-          localStorage.setItem(
-            "adminUser",
-            JSON.stringify(data.admin)
-          );
-
+          localStorage.setItem("adminUser", JSON.stringify(data.admin));
           router.replace("/admin");
-        } else {
-          localStorage.removeItem(
-            "adminToken"
-          );
-
-          localStorage.removeItem(
-            "adminUser"
-          );
+          return;
         }
-      } catch (error) {
-        console.error(
-          "Existing administrator session verification failed:",
-          error
-        );
+
+        localStorage.removeItem("adminToken");
+        localStorage.removeItem("adminUser");
+        setCheckingSession(false);
+      } catch (err) {
+        console.error("Admin session verification failed:", err);
+
+        if (!cancelled) {
+          setError(
+            "Cannot connect to the backend. Please check the backend URL and server status."
+          );
+          setCheckingSession(false);
+        }
       }
     }
 
     verifyExistingSession();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
-  async function handleLogin(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     setError("");
 
-    const cleanUsername =
-      username.trim();
+    const cleanUsername = username.trim();
 
     if (!cleanUsername || !password) {
-      setError(
-        "Administrator username and password are required."
-      );
+      setError("Please enter your administrator username and password.");
       return;
     }
 
     try {
       setLoading(true);
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/admin/login`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            username: cleanUsername,
-            password,
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/admin/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: cleanUsername,
+          password,
+        }),
+        cache: "no-store",
+      });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
-      if (!response.ok || !data.success) {
+      if (!response.ok || !data?.success) {
         throw new Error(
-          data.message ||
-            "Administrator authentication failed."
+          data?.message ||
+            data?.error ||
+            `Login failed (HTTP ${response.status}).`
         );
       }
 
       if (!data.token) {
         throw new Error(
-          "Authentication succeeded but no session token was received."
+          "The backend did not return an authentication token."
         );
       }
 
-      /*
-       * Store the JWT in localStorage.
-       *
-       * The Admin Dashboard reads the token
-       * from the same location.
-       */
-      localStorage.setItem(
-        "adminToken",
-        data.token
-      );
+      const admin: AdminUser | undefined = data.admin;
 
-      localStorage.setItem(
-        "adminUser",
-        JSON.stringify(
-          data.admin || {}
-        )
-      );
+      if (
+        admin &&
+        (admin.role !== "ADMIN" || admin.isActive === false)
+      ) {
+        throw new Error("This account is not an active administrator.");
+      }
 
-      /*
-       * Remove the old frontend-only
-       * authentication flag.
-       */
-      sessionStorage.removeItem(
-        "adminAuthenticated"
-      );
+      localStorage.setItem("adminToken", data.token);
+      localStorage.setItem("adminUser", JSON.stringify(admin || {}));
 
-      sessionStorage.removeItem(
-        "adminToken"
-      );
-
-      sessionStorage.removeItem(
-        "adminUser"
-      );
+      sessionStorage.removeItem("adminAuthenticated");
+      sessionStorage.removeItem("adminToken");
+      sessionStorage.removeItem("adminUser");
 
       router.replace("/admin");
-    } catch (loginError) {
-      console.error(
-        "Administrator login error:",
-        loginError
-      );
+    } catch (err) {
+      console.error("Admin login failed:", err);
 
-      setError(
-        loginError instanceof Error
-          ? loginError.message
-          : "Unable to connect to the administrator authentication service."
-      );
+      if (err instanceof TypeError) {
+        setError(
+          `Unable to reach the backend at ${API_BASE_URL}. Check server availability and CORS configuration.`
+        );
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Admin login failed. Please try again."
+        );
+      }
     } finally {
       setLoading(false);
     }
   }
 
+  if (checkingSession) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#070707] px-6 text-white">
+        <p className="text-sm text-zinc-400">
+          Verifying administrator session...
+        </p>
+      </main>
+    );
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#070707] px-6 py-12 text-white">
-
       <section className="w-full max-w-md">
-
         <div className="mb-10">
-
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-red-500">
             TALENTRONAUT PVT LTD
           </p>
@@ -203,16 +190,10 @@ export default function AdminLoginPage() {
           <p className="mt-5 text-sm text-zinc-400">
             Administrator authentication
           </p>
-
         </div>
 
-        <form
-          onSubmit={handleLogin}
-          className="space-y-5"
-        >
-
+        <form onSubmit={handleLogin} className="space-y-5">
           <div>
-
             <label
               htmlFor="username"
               className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400"
@@ -224,21 +205,16 @@ export default function AdminLoginPage() {
               id="username"
               type="text"
               value={username}
-              onChange={(event) =>
-                setUsername(
-                  event.target.value
-                )
-              }
+              onChange={(event) => setUsername(event.target.value)}
               autoComplete="username"
+              required
               disabled={loading}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none transition focus:border-red-500 disabled:opacity-50"
               placeholder="Administrator username"
             />
-
           </div>
 
           <div>
-
             <label
               htmlFor="password"
               className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400"
@@ -250,23 +226,19 @@ export default function AdminLoginPage() {
               id="password"
               type="password"
               value={password}
-              onChange={(event) =>
-                setPassword(
-                  event.target.value
-                )
-              }
+              onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
+              required
               disabled={loading}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none transition focus:border-red-500 disabled:opacity-50"
               placeholder="Administrator password"
             />
-
           </div>
 
           {error && (
             <div
               role="alert"
-              className="rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-300"
+              className="break-words rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-300"
             >
               {error}
             </div>
@@ -277,29 +249,20 @@ export default function AdminLoginPage() {
             disabled={loading}
             className="w-full rounded-xl bg-red-600 px-5 py-4 font-bold uppercase tracking-[0.15em] text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading
-              ? "Authenticating..."
-              : "Enter Admin Center"}
+            {loading ? "Authenticating..." : "Enter Admin Center"}
           </button>
-
         </form>
 
         <div className="mt-8 text-center">
-
           <p className="text-xs text-zinc-600">
-            Secure administrator session
-            {" • "}
-            JWT authentication
+            Secure administrator session {" • "} JWT authentication
           </p>
 
           <p className="mt-2 text-[9px] uppercase tracking-[0.2em] text-zinc-700">
             TALENTRONAUT ATTENDANCE CONTROL CORE
           </p>
-
         </div>
-
       </section>
-
     </main>
   );
 }

@@ -32,6 +32,8 @@ model Attendance {
   status     String    @default("Present")
   latitude   Float?
   longitude  Float?
+  checkInPhotoUrl  String?
+  checkOutPhotoUrl String?
   createdAt  DateTime  @default(now())
 
   employee Employee @relation(fields: [employeeId], references: [employeeId])

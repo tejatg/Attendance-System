@@ -1,36 +1,24 @@
 const express = require("express");
-const bcrypt = require("bcrypt");
 const multer = require("multer");
-
 const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 const cloudinary = require("../utils/cloudinary");
-
-const {
-  requireAdminAuth,
-} = require("../middleware/adminAuth");
-
-const {
-  logAuditEvent,
-} = require("../utils/auditLogger");
+const { requireAdminAuth } = require("../middleware/adminAuth");
+const { logAuditEvent } = require("../utils/auditLogger");
 
 const router = express.Router();
-
 const prisma = new PrismaClient();
 
-/*
-========================================
-MULTER CONFIGURATION
-========================================
-*/
+/* PHOTO UPLOAD CONFIGURATION */
 
 const upload = multer({
   storage: multer.memoryStorage(),
-
   limits: {
     fileSize: 5 * 1024 * 1024,
+    files: 1,
   },
-
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
       "image/jpeg",
@@ -40,9 +28,7 @@ const upload = multer({
 
     if (!allowedTypes.includes(file.mimetype)) {
       return cb(
-        new Error(
-          "Only JPG, PNG, and WEBP employee photos are allowed."
-        )
+        new Error("Only JPG, PNG, and WEBP employee photos are allowed.")
       );
     }
 
@@ -50,462 +36,439 @@ const upload = multer({
   },
 });
 
-/*
-========================================
-CLOUDINARY UPLOAD HELPER
-========================================
-*/
+/* CLOUDINARY UPLOAD HELPER */
 
 function uploadToCloudinary(buffer) {
   return new Promise((resolve, reject) => {
-    const uploadStream =
-      cloudinary.uploader.upload_stream(
-        {
-          folder:
-            "talentronaut/smart-attendance/employees",
-          resource_type: "image",
-        },
-        (error, result) => {
-          if (error) {
-            return reject(error);
-          }
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "talentronaut/smart-attendance/employees",
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) return reject(error);
 
-          resolve(result);
+        if (!result || !result.secure_url) {
+          return reject(
+            new Error("Cloudinary did not return a photo URL.")
+          );
         }
-      );
 
-    uploadStream.end(buffer);
+        resolve(result);
+      }
+    );
+
+    stream.end(buffer);
   });
 }
+
+/* STANDARD EMPLOYEE RESPONSE FIELDS */
+
+const employeeSelect = {
+  id: true,
+  employeeId: true,
+  name: true,
+  email: true,
+  department: true,
+  location: true,
+  photoUrl: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
+/*
+========================================
+EMPLOYEE LOGIN
+POST /api/employees/login
+========================================
+*/
+
+router.post("/login", async (req, res) => {
+  try {
+    const employeeId =
+      typeof req.body?.employeeId === "string"
+        ? req.body.employeeId.trim()
+        : "";
+
+    const password =
+      typeof req.body?.password === "string"
+        ? req.body.password
+        : "";
+
+    if (!employeeId || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee ID and password are required.",
+      });
+    }
+
+    const secret = process.env.EMPLOYEE_JWT_SECRET;
+
+    if (!secret) {
+      console.error("EMPLOYEE_JWT_SECRET is not configured.");
+
+      return res.status(500).json({
+        success: false,
+        message: "Employee authentication is not configured.",
+      });
+    }
+
+    const employee = await prisma.employee.findUnique({
+      where: { employeeId },
+      select: {
+        employeeId: true,
+        name: true,
+        email: true,
+        department: true,
+        passwordHash: true,
+      },
+    });
+
+    if (
+      !employee ||
+      !employee.passwordHash ||
+      !(await bcrypt.compare(password, employee.passwordHash))
+    ) {
+      try {
+        await logAuditEvent({
+          eventType: "EMPLOYEE_LOGIN_FAILED",
+          actor: employeeId,
+          description: "Employee login failed.",
+          ipAddress: req.ip || null,
+          userAgent: req.get("user-agent") || null,
+          metadata: { reason: "INVALID_CREDENTIALS" },
+        });
+      } catch (auditError) {
+        console.error("Login failure audit error:", auditError);
+      }
+
+      return res.status(401).json({
+        success: false,
+        message: "Invalid employee ID or password.",
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        employeeId: employee.employeeId,
+        role: "EMPLOYEE",
+      },
+      secret,
+      { expiresIn: "8h" }
+    );
+
+    try {
+      await logAuditEvent({
+        eventType: "EMPLOYEE_LOGIN",
+        employeeId: employee.employeeId,
+        actor: employee.employeeId,
+        description: "Employee successfully logged in.",
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") || null,
+        metadata: { source: "employee-login" },
+      });
+    } catch (auditError) {
+      console.error("Login success audit error:", auditError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Employee login successful.",
+      token,
+      employee: {
+        employeeId: employee.employeeId,
+        name: employee.name,
+        email: employee.email,
+        department: employee.department,
+      },
+    });
+  } catch (error) {
+    console.error("EMPLOYEE LOGIN ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Employee login failed.",
+    });
+  }
+});
 
 /*
 ========================================
 GET ALL EMPLOYEES
-ADMIN AUTH REQUIRED
+ADMIN ONLY
 ========================================
 */
 
-router.get(
-  "/",
-  requireAdminAuth,
-  async (req, res) => {
-    try {
-      const employees =
-        await prisma.employee.findMany({
-          select: {
-            id: true,
-            employeeId: true,
-            name: true,
-            email: true,
-            department: true,
-            location: true,
-            photoUrl: true,
-            createdAt: true,
-            updatedAt: true,
-          },
+router.get("/", requireAdminAuth, async (req, res) => {
+  try {
+    const employees = await prisma.employee.findMany({
+      select: employeeSelect,
+      orderBy: { createdAt: "desc" },
+    });
 
-          orderBy: {
-            createdAt: "desc",
-          },
-        });
+    return res.status(200).json({
+      success: true,
+      employees,
+    });
+  } catch (error) {
+    console.error("Error fetching employees:", error);
 
-      res.json({
-        success: true,
-        employees,
-      });
-    } catch (error) {
-      console.error(
-        "Error fetching employees:",
-        error
-      );
-
-      res.status(500).json({
-        success: false,
-        message:
-          "Failed to fetch employees",
-        error:
-          error.message,
-      });
-    }
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch employees.",
+    });
   }
-);
+});
 
 /*
 ========================================
 GET EMPLOYEE BY DATABASE ID
-ADMIN AUTH REQUIRED
+ADMIN ONLY
 ========================================
 */
 
-router.get(
-  "/:id",
-  requireAdminAuth,
-  async (req, res) => {
-    try {
-      const id =
-        Number(req.params.id);
+router.get("/:id", requireAdminAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
 
-      if (!Number.isInteger(id)) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid employee ID.",
-        });
-      }
-
-      const employee =
-        await prisma.employee.findUnique({
-          where: {
-            id,
-          },
-
-          select: {
-            id: true,
-            employeeId: true,
-            name: true,
-            email: true,
-            department: true,
-            location: true,
-            photoUrl: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        });
-
-      if (!employee) {
-        return res.status(404).json({
-          success: false,
-          message:
-            "Employee not found",
-        });
-      }
-
-      res.json({
-        success: true,
-        employee,
-      });
-    } catch (error) {
-      console.error(
-        "Error fetching employee:",
-        error
-      );
-
-      res.status(500).json({
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return res.status(400).json({
         success: false,
-        message:
-          "Failed to fetch employee",
-        error:
-          error.message,
+        message: "Invalid employee database ID.",
       });
     }
+
+    const employee = await prisma.employee.findUnique({
+      where: { id },
+      select: employeeSelect,
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      employee,
+    });
+  } catch (error) {
+    console.error("Error fetching employee:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch employee.",
+    });
   }
-);
+});
 
 /*
 ========================================
-REGISTER NEW EMPLOYEE
-PUBLIC
+CREATE EMPLOYEE
+ADMIN ONLY
 ========================================
 */
 
 router.post(
   "/",
+  requireAdminAuth,
   upload.single("photo"),
   async (req, res) => {
+    let uploadedPhotoPublicId = null;
+
     try {
-      const {
-        employeeId,
-        name,
-        email,
-        department,
-        location,
-        password,
-        confirmPassword,
-      } = req.body;
+      const employeeId =
+        typeof req.body.employeeId === "string"
+          ? req.body.employeeId.trim()
+          : "";
 
-      /*
-      REQUIRED FIELD VALIDATION
-      */
+      const name =
+        typeof req.body.name === "string"
+          ? req.body.name.trim()
+          : "";
 
-      if (
-        !employeeId ||
-        !employeeId.trim()
-      ) {
+      const email =
+        typeof req.body.email === "string"
+          ? req.body.email.trim().toLowerCase()
+          : "";
+
+      const department =
+        typeof req.body.department === "string"
+          ? req.body.department.trim()
+          : "";
+
+      const location =
+        typeof req.body.location === "string"
+          ? req.body.location.trim()
+          : "";
+
+      const password =
+        typeof req.body.password === "string"
+          ? req.body.password
+          : "";
+
+      const confirmPassword =
+        typeof req.body.confirmPassword === "string"
+          ? req.body.confirmPassword
+          : "";
+
+      if (!employeeId || !name || !email || !department || !location) {
         return res.status(400).json({
           success: false,
           message:
-            "Employee ID is required.",
+            "Employee ID, name, email, department, and location are required.",
+        });
+      }
+
+      if (employeeId.length > 50) {
+        return res.status(400).json({
+          success: false,
+          message: "Employee ID must not exceed 50 characters.",
+        });
+      }
+
+      if (name.length > 150) {
+        return res.status(400).json({
+          success: false,
+          message: "Employee name must not exceed 150 characters.",
         });
       }
 
       if (
-        !name ||
-        !name.trim()
+        email.length > 254 ||
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
       ) {
         return res.status(400).json({
           success: false,
-          message:
-            "Employee name is required.",
+          message: "Please provide a valid employee email address.",
         });
       }
 
-      if (
-        !email ||
-        !email.trim()
-      ) {
+      if (department.length > 100 || location.length > 150) {
         return res.status(400).json({
           success: false,
-          message:
-            "Employee email is required.",
-        });
-      }
-
-      if (
-        !department ||
-        !department.trim()
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Department is required.",
-        });
-      }
-
-      if (
-        !location ||
-        !location.trim()
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Employee Location is required.",
+          message: "Department or location exceeds the allowed length.",
         });
       }
 
       if (!req.file) {
         return res.status(400).json({
           success: false,
-          message:
-            "Employee Photo is required.",
+          message: "Employee photo is required.",
         });
       }
 
-      if (
-        !password ||
-        !password.trim()
-      ) {
+      if (!password || password.length < 8) {
         return res.status(400).json({
           success: false,
-          message:
-            "Employee Password is required.",
+          message: "Password must contain at least 8 characters.",
         });
       }
 
-      if (password.length < 6) {
+      if (password !== confirmPassword) {
         return res.status(400).json({
           success: false,
-          message:
-            "Employee Password must be at least 6 characters.",
+          message: "Password and confirmation do not match.",
         });
       }
 
-      if (
-        confirmPassword ===
-          undefined ||
-        confirmPassword === ""
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Confirm Password is required.",
-        });
-      }
-
-      if (
-        password !==
-        confirmPassword
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Employee Password and Confirm Password do not match.",
-        });
-      }
-
-      /*
-      CHECK DUPLICATE EMPLOYEE
-      */
-
-      const existingEmployee =
-        await prisma.employee.findFirst({
-          where: {
-            OR: [
-              {
-                employeeId:
-                  employeeId.trim(),
-              },
-              {
-                email:
-                  email.trim(),
-              },
-            ],
-          },
-        });
+      const existingEmployee = await prisma.employee.findFirst({
+        where: {
+          OR: [{ employeeId }, { email }],
+        },
+        select: { id: true },
+      });
 
       if (existingEmployee) {
         return res.status(409).json({
           success: false,
-          message:
-            "Employee ID or email already exists.",
+          message: "Employee ID or email already exists.",
         });
       }
 
-      /*
-      HASH PASSWORD
-      */
-
-      const passwordHash =
-        await bcrypt.hash(
-          password,
-          12
-        );
-
-      /*
-      UPLOAD EMPLOYEE PHOTO
-      */
+      const passwordHash = await bcrypt.hash(password, 12);
 
       let cloudinaryResult;
 
       try {
-        cloudinaryResult =
-          await uploadToCloudinary(
-            req.file.buffer
-          );
+        cloudinaryResult = await uploadToCloudinary(req.file.buffer);
+        uploadedPhotoPublicId = cloudinaryResult.public_id;
       } catch (uploadError) {
-        console.error(
-          "Cloudinary employee photo upload failed:",
-          uploadError
-        );
+        console.error("Cloudinary photo upload failed:", uploadError);
 
-        return res.status(500).json({
+        return res.status(502).json({
           success: false,
           message:
-            "Employee photo upload failed. Employee was not registered.",
+            "Employee photo upload failed. The employee was not registered.",
         });
       }
 
-      /*
-      CREATE EMPLOYEE
-      */
-
-      const employee =
-        await prisma.employee.create({
-          data: {
-            employeeId:
-              employeeId.trim(),
-
-            name:
-              name.trim(),
-
-            email:
-              email.trim(),
-
-            department:
-              department.trim(),
-
-            location:
-              location.trim(),
-
-            passwordHash,
-
-            photoUrl:
-              cloudinaryResult.secure_url,
-          },
-
-          select: {
-            id: true,
-            employeeId: true,
-            name: true,
-            email: true,
-            department: true,
-            location: true,
-            photoUrl: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        });
-
-      /*
-      AUDIT EVENT
-      */
-
-      await logAuditEvent({
-        eventType:
-          "EMPLOYEE_REGISTERED",
-
-        employeeId:
-          employee.employeeId,
-
-        actor:
-          "EMPLOYEE_REGISTRATION",
-
-        description:
-          `Employee ${employee.name} was registered successfully.`,
-
-        ipAddress:
-          req.ip || null,
-
-        userAgent:
-          req.get(
-            "user-agent"
-          ) || null,
-
-        metadata: {
-          source:
-            "employee-registration",
-
-          department:
-            employee.department,
-
-          email:
-            employee.email,
-
-          hasPhoto:
-            Boolean(
-              employee.photoUrl
-            ),
-
-          hasLocation:
-            Boolean(
-              employee.location
-            ),
+      const employee = await prisma.employee.create({
+        data: {
+          employeeId,
+          name,
+          email,
+          department,
+          location,
+          passwordHash,
+          photoUrl: cloudinaryResult.secure_url,
         },
+        select: employeeSelect,
       });
 
-      /*
-      SUCCESS RESPONSE
-      */
+      try {
+        await logAuditEvent({
+          eventType: "EMPLOYEE_REGISTERED",
+          employeeId: employee.employeeId,
+          actor:
+            req.admin?.username ||
+            String(req.admin?.adminId || "ADMIN"),
+          description:
+            `Employee ${employee.name} was registered by an administrator.`,
+          ipAddress: req.ip || null,
+          userAgent: req.get("user-agent") || null,
+          metadata: {
+            source: "admin-employee-registration",
+            department: employee.department,
+            hasPhoto: Boolean(employee.photoUrl),
+            hasLocation: Boolean(employee.location),
+          },
+        });
+      } catch (auditError) {
+        console.error("Employee audit logging failed:", auditError);
+      }
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
-
-        message:
-          "Employee registered successfully with photo and location.",
-
+        message: "Employee registered successfully.",
         employee,
       });
     } catch (error) {
-      console.error(
-        "Error creating employee:",
-        error
-      );
+      console.error("Error creating employee:", error);
 
-      res.status(500).json({
+      if (uploadedPhotoPublicId) {
+        try {
+          await cloudinary.uploader.destroy(
+            uploadedPhotoPublicId,
+            { resource_type: "image" }
+          );
+        } catch (cleanupError) {
+          console.error("Photo cleanup failed:", cleanupError);
+        }
+      }
+
+      if (error.code === "P2002") {
+        return res.status(409).json({
+          success: false,
+          message: "Employee ID or email already exists.",
+        });
+      }
+
+      return res.status(500).json({
         success: false,
-        message:
-          "Failed to create employee",
-        error:
-          error.message,
+        message: "Failed to register employee.",
       });
     }
   }
@@ -513,49 +476,42 @@ router.post(
 
 /*
 ========================================
-MULTER / UPLOAD ERROR HANDLER
+UPLOAD ERROR HANDLER
 ========================================
 */
 
-router.use(
-  (
-    error,
-    req,
-    res,
-    next
-  ) => {
-    if (
-      error instanceof
-      multer.MulterError
-    ) {
-      if (
-        error.code ===
-        "LIMIT_FILE_SIZE"
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Employee Photo must be 5 MB or smaller.",
-        });
-      }
+router.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
 
+  if (error instanceof multer.MulterError) {
+    if (error.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({
         success: false,
-        message:
-          error.message,
+        message: "Employee photo must be 5 MB or smaller.",
       });
     }
 
-    if (error) {
+    if (error.code === "LIMIT_FILE_COUNT") {
       return res.status(400).json({
         success: false,
-        message:
-          error.message,
+        message: "Upload only one employee photo.",
       });
     }
 
-    next();
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
   }
-);
+
+  if (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message || "Invalid employee photo upload.",
+    });
+  }
+
+  return next();
+});
 
 module.exports = router;

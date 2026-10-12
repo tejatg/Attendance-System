@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -24,6 +26,10 @@ APPLICATION SECURITY
 */
 
 app.disable("x-powered-by");
+
+// Render (and most hosts) sit behind one reverse proxy. Without this every
+// user appears to share the proxy IP and the rate limiter blocks everyone together.
+app.set("trust proxy", 1);
 
 app.use(
   helmet({

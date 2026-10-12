@@ -1,7 +1,8 @@
 
-const API_BASE_URL =
+const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_URL ||
-  "https://attendance-backend-2nky.onrender.com";
+  "https://attendance-backend-2nky.onrender.com"
+).replace(/\/+$/, "");
 
 export async function apiRequest(
   path: string,
